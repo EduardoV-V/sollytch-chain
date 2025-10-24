@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.0",
+    "@hyperledger/fabric-gateway": "^1.9.0",
+    "crypto": "^1.0.1",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "util": "^0.12.5"
+  }
+}
