@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Execução de Chaincodes</title>
+    <style>
+      :root {
+        --primary: #1e7a35;
+        --primary-dark: #145427;
+        --bg: #f4fbf6;
+        --card: #ffffff;
+        --muted: #6b8b73;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .container {
+        background: var(--card);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        width: 90%;
+        max-width: 500px;
+        text-align: center;
+      }
+
+      .container h2 {
+        margin-bottom: 20px;
+        color: var(--primary-dark);
+      }
+
+      .form-group {
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: var(--muted);
+        width: 100%;
+        text-align: left;
+      }
+
+      /* Grupo do TEST-ID com prefixo fixo */
+      .test-id-wrapper {
+        display: flex;
+        align-items: center;
+        border: 1px solid #cfe6d4;
+        border-radius: 8px;
+        width: 100%;
+        background: white;
+        overflow: hidden;
+      }
+
+      .test-id-prefix {
+        background: #e7f4ea;
+        color: var(--primary-dark);
+        font-family: "Courier New", monospace;
+        padding: 10px;
+        border-right: 1px solid #cfe6d4;
+        font-weight: bold;
+        user-select: none;
+      }
+
+      #testNumber {
+        border: none;
+        outline: none;
+        padding: 10px;
+        font-size: 1rem;
+        font-family: "Courier New", monospace;
+        width: 100%;
+      }
+
+      .form-group input[type="file"],
+      .form-group .checkbox-wrapper {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        border: 1px solid #cfe6d4;
+        border-radius: 8px;
+        font-size: 1rem;
+        margin-bottom: 8px;
+      }
+
+      .checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: flex-start;
+        padding: 8px;
+      }
+
+      .button-group {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .button-group button {
+        padding: 10px 20px;
+        border: none;
+        background-color: var(--primary);
+        color: white;
+        border-radius: 8px;
+        font-size: 1rem;
+        cursor: pointer;
+        min-width: 120px;
+      }
+
+      .button-group button:hover {
+        background-color: var(--primary-dark);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Execução de Chaincodes</h2>
+
+      <div class="form-group">
+        <label for="testNumber">TEST-ID</label>
+        <div class="test-id-wrapper">
+          <span class="test-id-prefix">TEST-</span>
+          <input type="text" id="testNumber" placeholder="" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="fileInput">Arquivo (CSV, JSON, XLSX)</label>
+        <input type="file" id="fileInput" accept=".csv, .json, .xlsx" />
+      </div>
+
+      <div class="form-group" style="align-items: flex-start; width:100%;">
+        <label class="checkbox-wrapper" for="searchAll">
+          <input type="checkbox" id="searchAll" />
+          <span>buscar todos os testes?</span>
+        </label>
+      </div>
+
+      <div class="button-group">
+        <button id="searchBtn" type="button">busca</button>
+        <button id="saveBtn" type="button">salvar</button>
+      </div>
+    </div>
+
+    <script>
+      function getFullTestId() {
+        const num = document.getElementById("testNumber").value.trim();
+        return "TEST-" + num;
+      }
+
+      // Exemplo de uso — imprime o valor completo ao clicar em um dos botões
+      document.getElementById("searchBtn").addEventListener("click", () => {
+        console.log(getFullTestId());
+      });
+
+      document.getElementById("saveBtn").addEventListener("click", () => {
+        
+      });
+    </script>
+  </body>
+</html>

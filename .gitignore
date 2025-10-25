@@ -1,16 +1,42 @@
-node_modules
+# Fabric-generated files
+organizations/
+channel-artifacts/
+crypto-config/
+system-genesis-block/
+ledger/
+wallet/
+tmp/
+fabric-samples/
 
-fabric/crypto-config
-fabric/channel-artifacts
-fabric/ca
-fabric/bin
-fabric/builders
-chaincode/vendor/*
-chaincode/collections.json
-ccapi/vendor/*
-cc-tools-demo.tar.gz
-package-lock.json
+# Docker stuff
+*.log
+*.out
+*.tar
+*.tgz
+*.zip
+*.bak
+docker-compose.yaml.backup
+docker/
+*.pid
 
+# Node modules and Go build outputs
+node_modules/
+build/
+dist/
+vendor/
+chaincode/**/node_modules/
+chaincode/**/build/
+chaincode/**/dist/
+
+# IDE / OS junk
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
 
-tmp
+# Environment files
+.env
+.envrc
+.env.*

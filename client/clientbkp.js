@@ -17,8 +17,6 @@ const channelName = ('mainchannel');
 const chaincodeName = ('sollytch-chain');
 const mspId = ('org1MSP');
 
-let network, contract, client, gateway
-
 // Path to crypto materials.
 const cryptoPath = path.resolve(
     __dirname,
@@ -96,10 +94,8 @@ async function newSigner() {
     return signers.newPrivateKeySigner(privateKey);
 }
 
-async function invoke(contract, jsonString) {
-    // const jsonFilePath = path.join(__dirname, 'test.json')
-    // Escrever parte do código que vai receber a string e processar para o resto
-
+async function invoke(contract) {
+    const jsonFilePath = path.join(__dirname, 'test.json')
     const testData = JSON.parse(fsRead.readFileSync(jsonFilePath, 'utf8'));
     const testID = testData.test_id;
     const jsonStr = JSON.stringify(testData);
@@ -107,43 +103,123 @@ async function invoke(contract, jsonString) {
     console.log("teste armazenado com sucesso")
 }
 
-async function initialize() {
-    client = await newGrpcConnection();
+async function query(contract, testID) {
+    try {
+        console.log(`consultando teste com ID: ${testID}`);
+        
+        const resultBytes = await contract.evaluateTransaction("QueryTest", testID);
+        let resultString = resultBytes.toString('utf8');
+
+        // Caso o retorno venha como "123,34,..." (lista de bytes)
+        if (/^\d+(,\d+)*$/.test(resultString.trim())) {
+            // Converte string de números em array de bytes
+            const byteArray = resultString.trim().split(',').map(n => parseInt(n));
+            resultString = Buffer.from(byteArray).toString('utf8');
+        }
+
+        const result = JSON.parse(resultString);
+        console.log(JSON.stringify(result, null, 2));
+
+        return result;
+    } catch (error) {
+        console.error("erro ao consultar teste", error);
+    }
+}
+
+// Adicione esta função para debug no seu código
+async function debugIdentity() {
+    const identity = await newIdentity();
+    console.log('MSP ID:', identity.mspId);
+    console.log('Certificado:', identity.credentials.toString());
     
-    gateway = connect({
+    const certPath = await getFirstDirFileName(certDirectoryPath);
+    console.log('Caminho do certificado:', certPath);
+    
+    const keyPath = await getFirstDirFileName(keyDirectoryPath);
+    console.log('Caminho da chave privada:', keyPath);
+    
+    // Verifique se os arquivos existem
+    try {
+        const certStats = await fs.stat(certPath);
+        const keyStats = await fs.stat(keyPath);
+        console.log('Certificado existe:', certStats.isFile());
+        console.log('Chave existe:', keyStats.isFile());
+    } catch (error) {
+        console.error('Erro ao verificar arquivos:', error);
+    }
+}
+
+function envOrDefault(key, defaultValue) {
+    return process.env[key] || defaultValue;
+}
+
+function askQuestion(query) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+    return new Promise(resolve => rl.question(query, ans => {
+        rl.close();
+        resolve(ans);
+    }));
+}
+
+function displayInputParameters() {
+    console.log(`channelName:       ${channelName}`);
+    console.log(`chaincodeName:     ${chaincodeName}`);
+    console.log(`mspId:             ${mspId}`);
+    console.log(`cryptoPath:        ${cryptoPath}`);
+    console.log(`keyDirectoryPath:  ${keyDirectoryPath}`);
+    console.log(`certDirectoryPath: ${certDirectoryPath}`);
+    console.log(`tlsCertPath:       ${tlsCertPath}`);
+    console.log(`peerEndpoint:      ${peerEndpoint}`);
+    console.log(`peerHostAlias:     ${peerHostAlias}`);
+}
+
+async function main() {
+    displayInputParameters();
+    debugIdentity();
+
+    // The gRPC client connection should be shared by all Gateway connections to this endpoint.
+    const client = await newGrpcConnection();
+    
+    const gateway = connect({
         client,
         identity: await newIdentity(),
         signer: await newSigner(),
+        hash: hash.sha256,
+        // Default timeouts for different gRPC calls
+        evaluateOptions: () => {
+            return { deadline: Date.now() + 5000 }; // 5 seconds
+        },
+        endorseOptions: () => {
+            return { deadline: Date.now() + 15000 }; // 15 seconds
+        },
+        submitOptions: () => {
+            return { deadline: Date.now() + 5000 }; // 5 seconds
+        },
+        commitStatusOptions: () => {
+            return { deadline: Date.now() + 60000 }; // 1 minute
+        },
     });
 
      try {
-        network = gateway.getNetwork(channelName);
-        contract = network.getContract(chaincodeName);
+        const network = gateway.getNetwork(channelName);
+        const contract = network.getContract(chaincodeName);
 
-    } catch (err) {
-        console.error(err)
+        const action = (await askQuestion('input: ')).trim().toLowerCase();
+
+        if (action === 'invoke') {
+            await invoke(contract);
+        } else if (action === 'query') {
+            const testID = (await askQuestion('testID: ')).trim();
+            await query(contract, testID);
+        } else {
+            console.log('invalido');
+        }
+
+    } finally {
+        gateway.close();
+        client.close();
     }
 }
-
-async function invoke(fcn, ...args) {
-    await contract.submitTransaction(fcn, ...args)
-    console.log("teste armazenado com sucesso")
-}
-
-async function query(fcn, testID) {
-    let queryResult
-    if (fcn=='QueryAll'){
-        await contract.evaluateTransaction('QueryAll')
-    } else if (fcn=='QueryTest'){
-        await contract.evaluateTransaction('QueryTest', testID)
-    }
-    
-    return queryResult
-}
-
-async function disconnect(){
-    gateway.close();
-    client.close();
-}
-
-module.exports = { initialize, disconnect}
