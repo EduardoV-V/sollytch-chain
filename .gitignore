@@ -7,6 +7,7 @@ ledger/
 wallet/
 tmp/
 fabric-samples/
+fabric/bin
 
 # Docker stuff
 *.log
