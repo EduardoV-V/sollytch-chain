@@ -1,3 +1,49 @@
+# Protótipo Hyperledger Fabric - Sollytch
+
+Este repositório é um protótipo baseado na distribuição de demonstração do hyperledger fabric cc-tools. Essa distribuição do fabric é a mesma usada pela RNP, com alguns scripts de configuração a menos, mas a funcionalidade é essencialmente a mesma. Este repositório contém o chaincode protótipo para armazenamento e busca dos dados dos testes de cassetes. Também possui uma API de busca inicial, sem uma definição pronta no momento. 
+
+## Instalação de Dependências
+
+Para instalar todas as dependências, basta executar o arquivo `./install.sh`, dentro da pasta scripts. Isso deve automaticamente instalar todos os pacotes necessários. Caso algum deles dê erro, as dependências estão listadas abaixo:
+
+- Go versão 1.21 ou superior
+- Docker versão 20.10.5 ou superior
+- Docker Compose versão 1.28.5 ou superior
+- Node.js versão v22.19.0 ou superior
+- npm versão 11.6.2 ou superior
+
+## Gerenciamento da rede
+
+Para levantar a rede, é *ESSENCIAL* usar o script `./startDev.sh` na pasta raiz da rede com o parâmetro `-ccaas`. O comando é:
+
+```bash
+./startDev.sh -ccaas
+```
+
+Para derrubar, deve-se usar o script `./network.sh` com o parâmetro `down -noclr`. Isso vai manter os artefatos da rede ainda criados, o que evita processamento extra e mantém os certificados de usuários funcionais para levantamentos futuros.
+
+Por fim, para instalar o chaincode de armazenamento dos testes, basta rodar o comando abaixo:
+
+```bash
+./network.sh deployCCAAS -ccn sollytch-chain -ccp ../sollytch-chain/
+```
+
+Irei implementar um script para automatizar esse processo de instalação do chaincode, mas por enquanto esse comando funciona perfeitamente.
+
+## Execução do chaincode
+
+Na pasta raiz da rede, tem uma pasta "client". Essa pasta contém todos os itens para executar o chaincode usando um cliente `Node.js`. Para instalar as dependências, acesse a pasta client e execute `npm i`. Após a instalação, o chaincode pode ser executado usando o arquivo `clientbkp.js`.
+
+O arquivo pode ser executado usando o comando `node clientbkp.js`. Isso resultará na espera de um input do usuário, onde as opções são "invoke" e "query". A opção invoke vai armazenar o teste no ledger da blockchain, teste esse que está no arquivo `test.json`. Esse arquivo é uma das linhas da planilha com os dados dos testes. Ainda não foi implementada nenhuma forma de enviar o arquivo da planilha e processar ele automaticamente, mas em breve será adicionado.
+
+A opção query vai solicitar que o usuário digite o ID do teste que foi inserido no ledger. O ID do teste pode ser checado na primeira coluna da planilha, basta inserir o ID no terminal e isso imprimirá o teste associado com este ID. Um exemplo de ID a ser inserido é `TEST-00001`.
+
+## Fim de sessão
+
+Daqui para baixo é o readme.md original do repositório. Também contém algumas informações essenciais sobre a rede, porém não relacionada aos específicos da rede sollytch
+
+---
+
 # Hyperledger Labs CC Tools Demo Chaincode 
 
 ## Directory Structure
