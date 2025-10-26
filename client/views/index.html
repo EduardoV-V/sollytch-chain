@@ -156,20 +156,122 @@
         <button id="saveBtn" type="button">salvar</button>
       </div>
     </div>
-
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
+    function excelSerialToDateString(serial) {
+        const excelEpoch = new Date(1899, 11, 30);
+        const millisecondsPerDay = 24 * 60 * 60 * 1000;
+        const date = new Date(excelEpoch.getTime() + serial * millisecondsPerDay);
+        return date.toISOString();
+    }
+
+    function convertExcelDates(obj) {
+        const result = {};        
+        for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'number' && value > 25567 && value < 50000) {
+                result[key] = excelSerialToDateString(value);
+            } else if (typeof value === 'number' && key.toLowerCase().includes('timestamp')) {
+                result[key] = excelSerialToDateString(value);
+            } else if (typeof value === 'number' && key.toLowerCase().includes('date')) {
+                result[key] = excelSerialToDateString(value);
+            } else {
+                result[key] = value;
+            }
+        }
+        
+        return result;
+    }
+      async function postData(url, data) {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        return response.json();
+      }
+
       function getFullTestId() {
         const num = document.getElementById("testNumber").value.trim();
         return "TEST-" + num;
       }
 
-      // Exemplo de uso — imprime o valor completo ao clicar em um dos botões
-      document.getElementById("searchBtn").addEventListener("click", () => {
-        console.log(getFullTestId());
+      // Função para ler e converter qualquer tipo de arquivo (pegando só a primeira linha)
+      async function readFileAsJson(file) {
+        const extension = file.name.split('.').pop().toLowerCase();
+
+        if (extension === "json") {
+            const text = await file.text();
+            return JSON.parse(text);
+        }
+
+        if (extension === "csv") {
+            const text = await file.text();
+            const lines = text.trim().split("\n");
+            const headers = lines[0].split(",").map(h => h.trim());
+            const firstRow = lines[1]?.split(",").map(v => v.trim());
+            if (!firstRow) throw new Error("O CSV está vazio ou sem dados.");
+            const rawData = Object.fromEntries(headers.map((h, i) => [h, firstRow[i]]));
+            
+            // Aplica conversão para CSV também (caso tenha números que sejam datas)
+            return convertExcelDates(rawData);
+        }
+
+        if (extension === "xlsx") {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: "array" });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            
+            // Configura para ler datas como strings
+            const rows = XLSX.utils.sheet_to_json(sheet, { 
+                raw: false, // Isso faz com que as datas sejam lidas como strings
+                dateNF: 'yyyy-mm-dd HH:MM:ss' // Formato desejado
+            });
+            
+            if (!rows.length) throw new Error("O arquivo XLSX está vazio.");
+            
+            // Se mesmo assim vier números, aplica a conversão
+            const firstRow = rows[0];
+            return convertExcelDates(firstRow);
+        }
+
+        throw new Error("Formato de arquivo não suportado (use .csv, .xlsx ou .json)");
+    }
+
+      // Botão de salvar/invocar chaincode
+      document.getElementById("saveBtn").addEventListener("click", async () => {
+        const fileInput = document.getElementById("fileInput");
+        if (fileInput.files.length === 0) {
+          alert("Selecione um arquivo primeiro!");
+          return;
+        }
+
+        try {
+          const file = fileInput.files[0];
+          const data = await readFileAsJson(file);
+          const testID = getFullTestId();
+
+          const body = { testID, data }; // agora enviamos no formato combinado
+
+          const result = await postData("/invoke", body);
+          alert(result.message || "Arquivo enviado com sucesso!");
+        } catch (err) {
+          console.error(err);
+          alert("Erro ao processar o arquivo: " + err.message);
+        }
       });
 
-      document.getElementById("saveBtn").addEventListener("click", () => {
-        
+      // Botão de busca
+      document.getElementById("searchBtn").addEventListener("click", async () => {
+        const testID = getFullTestId();
+        const searchAll = document.getElementById("searchAll").checked;
+
+        const fcn = searchAll ? "QueryAll" : "QueryTest";
+        const body = { fcn, testID };
+
+        const result = await postData("/query", body);
+        console.log("Resultado da busca:", result);
+        alert(JSON.stringify(result, null, 2));
       });
     </script>
   </body>

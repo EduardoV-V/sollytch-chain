@@ -56,55 +56,40 @@ app.get('/chaincode', (req, res) => {
 });
 
 app.post('/invoke', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(400).json({ message: "Token não fornecido" });
+  const { testID, data } = req.body;
+  if (!testID || !data) {
+    return res.status(400).json({ message: 'Parâmetros ausentes.' });
+  }
 
-    let username, proposalDigest;
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        username = decoded.sub || decoded.username;
-        if (!username) {
-            return res.status(400).json({ message: "Token válido, mas sem nome de usuário." });
-        }
-    } catch (error) {
-        console.error("Erro ao verificar token:", error.message);
-        return res.status(401).json({ message: 'Token inválido ou expirado' });
-    }
-
-    const { fcn, testID, string} = req.body;
-
-    return res.status(200).json({
-        message: "Proposta criada com sucesso",
-        username,
-        proposalDigest: proposalDigest.toString('base64')
-    });
+  try {
+    await initialize();
+    const jsonString = JSON.stringify(data);
+    await invoke(jsonString, testID);
+    await disconnect();
+    return res.status(200).json({ message: 'Transação executada com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao invocar transação:', error);
+    await disconnect();
+    return res.status(500).json({ message: 'Falha ao executar a transação.' });
+  }
 });
 
 app.post('/query', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(400).json({ message: "Token não fornecido" });
+  const { fcn, testID } = req.body;
+  if (!fcn) {
+    return res.status(400).json({ message: 'Função não fornecida.' });
+  }
 
-    let username, proposalDigest;
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        username = decoded.sub || decoded.username;
-        if (!username) {
-            return res.status(400).json({ message: "Token válido, mas sem nome de usuário." });
-        }
-    } catch (error) {
-        console.error("Erro ao verificar token:", error.message);
-        return res.status(401).json({ message: 'Token inválido ou expirado' });
-    }
-
-    const { fcn, testID, string} = req.body;
-
-    return res.status(200).json({
-        message: "Proposta criada com sucesso",
-        username,
-        proposalDigest: proposalDigest.toString('base64')
-    });
+  try {
+    await initialize()
+    const result = await query(fcn, testID);
+    await disconnect()
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Erro ao consultar dados:', error);
+    await disconnect()
+    return res.status(500).json({ message: 'Erro ao consultar o ledger.' });
+  }
 });
 
 // ----------------------------- ROTAS API -----------------------------

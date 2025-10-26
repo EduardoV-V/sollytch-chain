@@ -23,11 +23,13 @@ let network, contract, client, gateway
 const cryptoPath = path.resolve(
     __dirname,
     '..',
+    '..',
     'fabric',
     'organizations',
     'peerOrganizations',
     'org1.example.com'
 );
+console.log(cryptoPath)
 
 const keyDirectoryPath = path.resolve(
     cryptoPath,
@@ -91,15 +93,9 @@ async function newSigner() {
     return signers.newPrivateKeySigner(privateKey);
 }
 
-async function invoke(contract, jsonString) {
-    // const jsonFilePath = path.join(__dirname, 'test.json')
-    // Escrever parte do código que vai receber a string e processar para o resto
-
-    const testData = JSON.parse(fsRead.readFileSync(jsonFilePath, 'utf8'));
-    const testID = testData.test_id;
-    const jsonStr = JSON.stringify(testData);
-    await contract.submitTransaction("StoreTest", testID, jsonStr)
-    console.log("teste armazenado com sucesso")
+async function invoke(jsonString, testID) {
+  await contract.submitTransaction("StoreTest", testID, jsonString)
+  console.log(`Teste ${testID} armazenado com sucesso no ledger.`);
 }
 
 async function initialize() {
@@ -118,11 +114,6 @@ async function initialize() {
     } catch (err) {
         console.error(err)
     }
-}
-
-async function invoke(fcn, string) {
-    await contract.submitTransaction(fcn, string)
-    console.log("teste armazenado com sucesso")
 }
 
 async function query(fcn, testID) {
