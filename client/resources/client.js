@@ -1,14 +1,6 @@
-/*
- * Copyright IBM Corp. All Rights Reserved.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 const grpc = require('@grpc/grpc-js');
-const readline = require('readline');
 const { connect, hash, signers } = require('@hyperledger/fabric-gateway');
 const crypto = require('node:crypto');
-const fsRead = require('fs') 
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { TextDecoder } = require('node:util');
@@ -118,8 +110,8 @@ async function initialize() {
 
 async function query(fcn, testID) {
     let result
-    if (fcn=='QueryAll'){
-        result = await contract.evaluateTransaction('QueryAll')
+    if (fcn=='GetAllTests'){
+        result = await contract.evaluateTransaction('GetAllTests')
     } else if (fcn=='QueryTest'){
         result = await contract.evaluateTransaction('QueryTest', testID)
     }

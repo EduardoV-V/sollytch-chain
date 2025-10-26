@@ -130,7 +130,6 @@
   <body>
     <div class="container">
       <h2>Execução de Chaincodes</h2>
-
       <div class="form-group">
         <label for="testNumber">TEST-ID</label>
         <div class="test-id-wrapper">
@@ -138,53 +137,82 @@
           <input type="text" id="testNumber" placeholder="" />
         </div>
       </div>
-
       <div class="form-group">
         <label for="fileInput">Arquivo (CSV, JSON, XLSX)</label>
         <input type="file" id="fileInput" accept=".csv, .json, .xlsx" />
       </div>
-
       <div class="form-group" style="align-items: flex-start; width:100%;">
         <label class="checkbox-wrapper" for="searchAll">
           <input type="checkbox" id="searchAll" />
-          <span>buscar todos os testes?</span>
+          <span>Buscar todos os testes?</span>
+        </label>
+        <br>
+
+        <label class="checkbox-wrapper" for="sendAllRows">
+          <input type="checkbox" id="sendAllRows" />
+          <span>Enviar todas as linhas do arquivo</span>
         </label>
       </div>
-
       <div class="button-group">
-        <button id="searchBtn" type="button">busca</button>
-        <button id="saveBtn" type="button">salvar</button>
+        <button id="saveBtn" type="button">Salvar</button>
+        <button id="searchBtn" type="button">Busca</button>
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
-    function excelSerialToDateString(serial) {
+      function convertTypes(obj) {
+        const result = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (typeof value === "string") {
+            const lower = value.trim().toLowerCase();
+            // Converte booleanos ("true"/"false")
+            if (lower === "true") {
+              result[key] = true;
+              continue;
+            }
+            if (lower === "false") {
+              result[key] = false;
+              continue;
+            }
+            // Converte números
+            if (!isNaN(value) && value.trim() !== "") {
+              result[key] = parseFloat(value);
+              continue;
+            }
+          }
+          result[key] = value;
+        }
+        return result;
+      }
+
+      function excelSerialToDateString(serial) {
         const excelEpoch = new Date(1899, 11, 30);
         const millisecondsPerDay = 24 * 60 * 60 * 1000;
         const date = new Date(excelEpoch.getTime() + serial * millisecondsPerDay);
         return date.toISOString();
-    }
+      }
 
-    function convertExcelDates(obj) {
-        const result = {};        
+      function convertExcelDates(obj) {
+        const result = {};
         for (const [key, value] of Object.entries(obj)) {
-            if (typeof value === 'number' && value > 25567 && value < 50000) {
-                result[key] = excelSerialToDateString(value);
-            } else if (typeof value === 'number' && key.toLowerCase().includes('timestamp')) {
-                result[key] = excelSerialToDateString(value);
-            } else if (typeof value === 'number' && key.toLowerCase().includes('date')) {
-                result[key] = excelSerialToDateString(value);
-            } else {
-                result[key] = value;
-            }
+          if (typeof value === 'number' && value > 25567 && value < 50000) {
+            result[key] = excelSerialToDateString(value);
+          } else if (typeof value === 'number' && key.toLowerCase().includes('timestamp')) {
+            result[key] = excelSerialToDateString(value);
+          } else if (typeof value === 'number' && key.toLowerCase().includes('date')) {
+            result[key] = excelSerialToDateString(value);
+          } else {
+            result[key] = value;
+          }
         }
-        
         return result;
-    }
+      }
       async function postData(url, data) {
         const response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify(data),
         });
         return response.json();
@@ -194,81 +222,98 @@
         const num = document.getElementById("testNumber").value.trim();
         return "TEST-" + num;
       }
-
-      // Função para ler e converter qualquer tipo de arquivo (pegando só a primeira linha)
-      async function readFileAsJson(file) {
+      async function readFileAsJson(file, sendAll) {
         const extension = file.name.split('.').pop().toLowerCase();
-
         if (extension === "json") {
-            const text = await file.text();
-            return JSON.parse(text);
+          const text = await file.text();
+          const data = JSON.parse(text);
+          return Array.isArray(data) ? data : [data];
         }
-
         if (extension === "csv") {
-            const text = await file.text();
-            const lines = text.trim().split("\n");
-            const headers = lines[0].split(",").map(h => h.trim());
-            const firstRow = lines[1]?.split(",").map(v => v.trim());
-            if (!firstRow) throw new Error("O CSV está vazio ou sem dados.");
-            const rawData = Object.fromEntries(headers.map((h, i) => [h, firstRow[i]]));
-            
-            // Aplica conversão para CSV também (caso tenha números que sejam datas)
-            return convertExcelDates(rawData);
+          const text = await file.text();
+          const lines = text.trim().split("\n");
+          const headers = lines[0].split(",").map(h => h.trim());
+          if (lines.length < 2) throw new Error("O CSV está vazio ou sem dados.");
+          const rows = lines.slice(1).map(line => {
+            const values = line.split(",").map(v => v.trim());
+            const rawData = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+            return convertTypes(convertExcelDates(rawData));
+          });
+          return sendAll ? rows : [rows[0]];
         }
-
         if (extension === "xlsx") {
-            const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data, { type: "array" });
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            
-            // Configura para ler datas como strings
-            const rows = XLSX.utils.sheet_to_json(sheet, { 
-                raw: false, // Isso faz com que as datas sejam lidas como strings
-                dateNF: 'yyyy-mm-dd HH:MM:ss' // Formato desejado
-            });
-            
-            if (!rows.length) throw new Error("O arquivo XLSX está vazio.");
-            
-            // Se mesmo assim vier números, aplica a conversão
-            const firstRow = rows[0];
-            return convertExcelDates(firstRow);
+          const data = await file.arrayBuffer();
+          const workbook = XLSX.read(data, {
+            type: "array"
+          });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, {
+            raw: false,
+            dateNF: 'yyyy-mm-dd HH:MM:ss'
+          });
+          if (!rows.length) throw new Error("O arquivo XLSX está vazio.");
+          const converted = rows.map(r => convertTypes(convertExcelDates(r)));
+          return sendAll ? converted : [converted[0]];
         }
-
         throw new Error("Formato de arquivo não suportado (use .csv, .xlsx ou .json)");
-    }
-
-      // Botão de salvar/invocar chaincode
+      }
       document.getElementById("saveBtn").addEventListener("click", async () => {
-        const fileInput = document.getElementById("fileInput");
-        if (fileInput.files.length === 0) {
-          alert("Selecione um arquivo primeiro!");
-          return;
-        }
+      const fileInput = document.getElementById("fileInput");
+      const sendAll = document.getElementById("sendAllRows").checked;
 
-        try {
-          const file = fileInput.files[0];
-          const data = await readFileAsJson(file);
-          const testID = getFullTestId();
+      if (fileInput.files.length === 0) {
+        alert("Selecione um arquivo primeiro!");
+        return;
+      }
 
-          const body = { testID, data }; // agora enviamos no formato combinado
+      try {
+        const file = fileInput.files[0];
+        const dataArray = await readFileAsJson(file, sendAll);
 
+        for (let i = 0; i < dataArray.length; i++) {
+          const data = dataArray[i];
+          let testID =
+            data.test_id ||
+            data.TestID ||
+            data["TEST ID"] ||
+            data["test ID"] ||
+            null;
+
+          if (!testID) {
+            testID = `TEST-${i + 1}`;
+            console.warn(`TestID não encontrado na linha ${i + 1}. Usando ${testID}`);
+          }
+
+          const body = { testID, data };
           const result = await postData("/invoke", body);
-          alert(result.message || "Arquivo enviado com sucesso!");
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao processar o arquivo: " + err.message);
-        }
-      });
+          console.log(`Linha ${i + 1}:`, result);
 
+          if (!sendAll) break;
+          if (i < dataArray.length - 1) {
+            const cont = confirm(`Linha ${i + 1} enviada (ID: ${testID}). Deseja enviar a próxima (${i + 2}/${dataArray.length})?`);
+            if (!cont) {
+              alert("Envio interrompido pelo usuário.");
+              break;
+            }
+          }
+        }
+
+        alert("Envio concluído!");
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao processar o arquivo: " + err.message);
+      }
+    });
       // Botão de busca
       document.getElementById("searchBtn").addEventListener("click", async () => {
         const testID = getFullTestId();
         const searchAll = document.getElementById("searchAll").checked;
-
-        const fcn = searchAll ? "QueryAll" : "QueryTest";
-        const body = { fcn, testID };
-
+        const fcn = searchAll ? "GetAllTests" : "QueryTest";
+        const body = {
+          fcn,
+          testID
+        };
         const result = await postData("/query", body);
         console.log("Resultado da busca:", result);
         alert(JSON.stringify(result, null, 2));

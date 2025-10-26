@@ -32,11 +32,29 @@ Irei implementar um script para automatizar esse processo de instalação do cha
 
 ## Execução do chaincode
 
-Na pasta raiz da rede, tem uma pasta "client". Essa pasta contém todos os itens para executar o chaincode usando um cliente `Node.js`. Para instalar as dependências, acesse a pasta client e execute `npm i`. Após a instalação, o chaincode pode ser executado usando o arquivo `clientbkp.js`.
+Na pasta raiz da rede, tem uma pasta "client". Essa pasta contém todos os itens para executar o chaincode usando um cliente `Node.js`. Para instalar as dependências, acesse a pasta client e execute `npm i`. Após a instalação, o chaincode pode ser executado usando o arquivo `clientbkp.js`, ou usando a interface de testes.
+
+### Execução por Terminal
 
 O arquivo pode ser executado usando o comando `node clientbkp.js`. Isso resultará na espera de um input do usuário, onde as opções são "invoke" e "query". A opção invoke vai armazenar o teste no ledger da blockchain, teste esse que está no arquivo `test.json`. Esse arquivo é uma das linhas da planilha com os dados dos testes. Ainda não foi implementada nenhuma forma de enviar o arquivo da planilha e processar ele automaticamente, mas em breve será adicionado.
 
 A opção query vai solicitar que o usuário digite o ID do teste que foi inserido no ledger. O ID do teste pode ser checado na primeira coluna da planilha, basta inserir o ID no terminal e isso imprimirá o teste associado com este ID. Um exemplo de ID a ser inserido é `TEST-00001`.
+
+### Executando pela Interface de Teste
+
+Dentro da pasta client, tem um arquivo `server.js`. Basta executar ele com o comando `node server.js`. Isso levantará uma interface básica na porta 3000 da máquina, acessivel pelo link exibido no terminal ou digitando `localhost:3000` no navegador. Essa interface possui ambas as funcionalidades de armazenamento e de busca dos testes, permitindo que o usuário busque todos os testes ou por um teste específico buscando pelo ID do teste. Da mesma forma, é possível armazenar várias linhas de uma planilha xlsx ou csv com os dados dos testes.
+
+Dentro da pasta client há um arquivo `sollytch.xlsx` que pode ser usado como exemplo, mas qualquer planilha que siga a mesma ordem das colunas deste arquivo de exemplo serve. Ao executar, o código espera por uma confirmação do usuário para cada linha que será armazenada, permitindo cancelar caso desejado.
+
+## Código do Chaincode
+
+O código principal do chaincode está dentro da pasta `/sollytch-chain` na raiz do projeto. O código `main.go` é o código principal do chaincode. Qualquer edição feita nele NÃO IRÁ SURTIR EFEITO IMEDIATO NA REDE. Caso alguma alteração seja feita no chaincode, será necessário fazer o upgrade do chaincode na rede. Isso pode ser feito com o comando abaixo:
+
+```bash
+./network.sh deployCCAAS -ccn sollytch-chain -ccs 2 -ccv 2.0 -ccp ../sollytch-chain/
+```
+
+OBS: caso o chaincode precise de upgrade novamente, basta alterar os valores de `-ccs` e `-ccv`.
 
 ## Fim de sessão
 

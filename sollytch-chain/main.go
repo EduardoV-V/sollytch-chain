@@ -46,7 +46,7 @@ type TestRecord struct {
 	AmbientRHPct            float64    `json:"ambient_RH_pct"`
 	LightingLux             float64    `json:"lighting_lux"`
 	TiltDeg                 float64    `json:"tilt_deg"`
-	PreincubationTimeS      int        `json:"preincubation_time_s"`
+	PreincubationTimeS      float64    `json:"preincubation_time_s"`
 	TimeSinceSamplingMin    float64    `json:"time_since_sampling_min"`
 	StorageCondition        string     `json:"storage_condition"`
 	PrefilterUsed           bool       `json:"prefilter_used"`
