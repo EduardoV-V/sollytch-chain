@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  seu-servidor:
+    build: .
+    container_name: fabric-web-iface
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - fabric-network
+    volumes:
+      # Se precisar de arquivos de configuração
+      - ./resources:/app/resources
+      - ./views:/app/views
+    environment:
+      - NODE_ENV=production
+
+networks:
+  fabric-network:
+    external: true
+    name: cc-tools-demo-net

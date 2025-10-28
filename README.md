@@ -42,9 +42,15 @@ A opção query vai solicitar que o usuário digite o ID do teste que foi inseri
 
 ### Executando pela Interface de Teste
 
-Dentro da pasta client, tem um arquivo `server.js`. Basta executar ele com o comando `node server.js`. Isso levantará uma interface básica na porta 3000 da máquina, acessivel pelo link exibido no terminal ou digitando `localhost:3000` no navegador. Essa interface possui ambas as funcionalidades de armazenamento e de busca dos testes, permitindo que o usuário busque todos os testes ou por um teste específico buscando pelo ID do teste. Da mesma forma, é possível armazenar várias linhas de uma planilha xlsx ou csv com os dados dos testes.
+O servidor agora está containerizado em Docker. Para executar, acesse a pasta client e execute o comando:
+```bash
+docker-compose up -d
+```
 
-Dentro da pasta client há um arquivo `sollytch.xlsx` que pode ser usado como exemplo, mas qualquer planilha que siga a mesma ordem das colunas deste arquivo de exemplo serve. Ao executar, o código espera por uma confirmação do usuário para cada linha que será armazenada, permitindo cancelar caso desejado.
+Isso levantará automaticamente a interface na porta 3000, acessível em localhost:3000 ou no IP da máquina host. O container ficará rodando continuamente em background, sem necessidade de manter o terminal aberto e pode ser derrubado com o comando `docker-compose down -v`
+
+A interface mantém as mesmas funcionalidades de armazenamento e busca de testes, permitindo buscar todos os testes ou por ID específico, além de importar dados de planilhas xlsx, csv ou json. O arquivo sollytch.xlsx na pasta client serve como exemplo para o formato esperado.
+
 
 ## Código do Chaincode
 
@@ -55,6 +61,38 @@ O código principal do chaincode está dentro da pasta `/sollytch-chain` na raiz
 ```
 
 OBS: caso o chaincode precise de upgrade novamente, basta alterar os valores de `-ccs` e `-ccv`.
+
+## Hyperledger Explorer
+
+O Hyperledger Explorer é uma ferramenta de gerenciamento da rede fabric. O explorer permite ver os seguintes itens da rede:
+
+- Lista de canais
+- Organizações (org1, org2 e org3)
+- Peers
+- Orderers
+- Blocos e Transações 
+- Detalhes das transações
+- Chaincodes instalados
+
+Além disso, ele possui alguns extras como gráficos, exibidos na página inicial.
+
+Para levantar o explorer, basta entrar na pasta `/explorer` e executar o comando `docker-compose up -d`. Isso levantará o hyperledger explorer na porta 8080, mas isso pode ser editado no arquivo docker-compose.yaml, apenas trocando o número da porta caso a porta 8080 não esteja dispoível.
+
+Para derrubar o hyperledger explorer, basta rodar o comando `docker-compose down -v`. Isso derrubará o container e liberará a porta usada pelo explorer.
+
+## Fauxton
+
+O Fauxton é a interface web nativa do CouchDB, que atua como banco de estado no Hyperledger Fabric. Ele fornece uma forma visual de interagir com os dados armazenados na blockchain. Ele permite visualizar diretamente os documentos JSON armazenados pelos chaincodes, executar consultas complexas e realizar debug do estado mundial (world state) da rede.
+
+Para acessar o fauxton, basta abrir um dos links abaixo para a org qu deseja verificar:
+
+```bash
+    Org1: http://localhost:5984/_utils/
+
+    Org2: http://localhost:7984/_utils/
+
+    Org3: http://localhost:9984/_utils/
+```
 
 ## Fim de sessão
 
