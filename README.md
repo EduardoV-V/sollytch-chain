@@ -93,6 +93,12 @@ Para acessar o fauxton, basta abrir um dos links abaixo para a org qu deseja ver
 
     Org3: http://localhost:9984/_utils/
 ```
+As credenciais de acesso são:
+
+```bash
+user: admin
+senha: adminpw
+```
 
 ## Fim de sessão
 
