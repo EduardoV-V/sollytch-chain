@@ -1,18 +1,23 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
+    <!-- Aviso: Esse html é bem simples, é apenas uma interface de teste, não considere como nenhum produto final -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Execução de Chaincodes</title>
     <style>
+      /* ===== VARIÁVEIS DE COR E TEMA ===== */
+      /* Define as cores principais usadas em todo o sistema */
       :root {
-        --primary: #1e7a35;
-        --primary-dark: #145427;
-        --bg: #f4fbf6;
-        --card: #ffffff;
-        --muted: #6b8b73;
+        --primary: #1e7a35;        /* Cor primária - verde principal */
+        --primary-dark: #145427;   /* Cor primária escura - para hover */
+        --bg: #f4fbf6;            /* Cor de fundo da página */
+        --card: #ffffff;           /* Cor de fundo do container principal */
+        --muted: #6b8b73;         /* Cor para textos secundários */
       }
 
+      /* ===== ESTILOS GERAIS ===== */
+      /* Centraliza todo o conteúdo vertical e horizontalmente na tela */
       body {
         font-family: Arial, sans-serif;
         margin: 0;
@@ -24,6 +29,8 @@
         height: 100vh;
       }
 
+      /* ===== CONTAINER PRINCIPAL ===== */
+      /* Caixa branca que contém todo o formulário */
       .container {
         background: var(--card);
         padding: 20px;
@@ -34,11 +41,14 @@
         text-align: center;
       }
 
+      /* Título principal do formulário */
       .container h2 {
         margin-bottom: 20px;
         color: var(--primary-dark);
       }
 
+      /* ===== GRUPOS DE CAMPOS DO FORMULÁRIO ===== */
+      /* Container para cada campo do formulário com espaçamento consistente */
       .form-group {
         margin-bottom: 15px;
         display: flex;
@@ -46,6 +56,8 @@
         align-items: center;
       }
 
+      /* ===== RÓTULOS DOS CAMPOS ===== */
+      /* Estilo para os labels dos campos do formulário */
       .form-group label {
         display: block;
         margin-bottom: 8px;
@@ -55,7 +67,8 @@
         text-align: left;
       }
 
-      /* Grupo do TEST-ID com prefixo fixo */
+      /* ===== CAMPO TEST-ID COM PREFIXO FIXO ===== */
+      /* Container especial para o campo TEST-ID com prefixo não editável */
       .test-id-wrapper {
         display: flex;
         align-items: center;
@@ -66,6 +79,7 @@
         overflow: hidden;
       }
 
+      /* Parte fixa do TEST-ID que mostra "TEST-" */
       .test-id-prefix {
         background: #e7f4ea;
         color: var(--primary-dark);
@@ -73,9 +87,10 @@
         padding: 10px;
         border-right: 1px solid #cfe6d4;
         font-weight: bold;
-        user-select: none;
+        user-select: none; /* Impede seleção de texto */
       }
 
+      /* Campo de entrada para o número do teste */
       #testNumber {
         border: none;
         outline: none;
@@ -85,6 +100,8 @@
         width: 100%;
       }
 
+      /* ===== ESTILOS PARA CAMPOS E CHECKBOXES ===== */
+      /* Estilo para campo de seleção de arquivo */
       .form-group input[type="file"],
       .form-group .checkbox-wrapper {
         width: 100%;
@@ -96,6 +113,7 @@
         margin-bottom: 8px;
       }
 
+      /* Container para checkboxes com alinhamento correto */
       .checkbox-wrapper {
         display: flex;
         align-items: center;
@@ -104,6 +122,8 @@
         padding: 8px;
       }
 
+      /* ===== BOTÕES ===== */
+      /* Container para os botões principais */
       .button-group {
         display: flex;
         justify-content: center;
@@ -111,6 +131,7 @@
         margin-top: 10px;
       }
 
+      /* Estilo base para os botões */
       .button-group button {
         padding: 10px 20px;
         border: none;
@@ -122,14 +143,19 @@
         min-width: 120px;
       }
 
+      /* Efeito hover para os botões */
       .button-group button:hover {
         background-color: var(--primary-dark);
       }
     </style>
   </head>
   <body>
+    <!-- ===== FORMULÁRIO PRINCIPAL ===== -->
     <div class="container">
       <h2>Execução de Chaincodes</h2>
+
+      <!-- ===== CAMPO TEST ID ===== -->
+      <!-- Campo para inserir o identificador do teste com prefixo fixo -->
       <div class="form-group">
         <label for="testNumber">TEST-ID</label>
         <div class="test-id-wrapper">
@@ -137,44 +163,54 @@
           <input type="text" id="testNumber" placeholder="" />
         </div>
       </div>
+
+      <!-- ===== CAMPO PARA SELECIONAR ARQUIVO ===== -->
+      <!-- Permite ao usuário selecionar arquivos de dados para processamento -->
       <div class="form-group">
         <label for="fileInput">Arquivo (CSV, JSON, XLSX)</label>
         <input type="file" id="fileInput" accept=".csv, .json, .xlsx" />
       </div>
+
+      <!-- ===== OPÇÕES DE CHECKBOX ===== -->
+      <!-- Opções de configuração para o processamento dos dados -->
       <div class="form-group" style="align-items: flex-start; width:100%;">
         <label class="checkbox-wrapper" for="searchAll">
           <input type="checkbox" id="searchAll" />
           <span>Buscar todos os testes?</span>
         </label>
         <br>
-
         <label class="checkbox-wrapper" for="sendAllRows">
           <input type="checkbox" id="sendAllRows" />
           <span>Enviar todas as linhas do arquivo</span>
         </label>
       </div>
+
+      <!-- ===== BOTÕES PRINCIPAIS ===== -->
+      <!-- Botões para executar as ações principais do sistema -->
       <div class="button-group">
         <button id="saveBtn" type="button">Salvar</button>
         <button id="searchBtn" type="button">Busca</button>
       </div>
     </div>
+
+    <!-- ===== BIBLIOTECA PARA PROCESSAMENTO DE PLANILHAS ===== -->
+    <!-- Biblioteca XLSX para leitura de arquivos Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
+      // ===== FUNÇÕES DE CONVERSÃO DE DADOS =====
+      
+      /**
+       * Converte strings que representam números e booleanos em seus tipos reais
+       * @param {Object} obj - Objeto com valores a serem convertidos
+       * @returns {Object} - Objeto com valores convertidos para seus tipos apropriados
+       */
       function convertTypes(obj) {
         const result = {};
         for (const [key, value] of Object.entries(obj)) {
           if (typeof value === "string") {
             const lower = value.trim().toLowerCase();
-            // Converte booleanos ("true"/"false")
-            if (lower === "true") {
-              result[key] = true;
-              continue;
-            }
-            if (lower === "false") {
-              result[key] = false;
-              continue;
-            }
-            // Converte números
+            if (lower === "true") { result[key] = true; continue; }
+            if (lower === "false") { result[key] = false; continue; }
             if (!isNaN(value) && value.trim() !== "") {
               result[key] = parseFloat(value);
               continue;
@@ -185,16 +221,27 @@
         return result;
       }
 
+      /**
+       * Converte valores numéricos do Excel para strings de data no formato ISO
+       * @param {number} serial - Número serial de data do Excel
+       * @returns {string} - Data no formato ISO string
+       */
       function excelSerialToDateString(serial) {
-        const excelEpoch = new Date(1899, 11, 30);
+        const excelEpoch = new Date(1899, 11, 30); // Data base do Excel (30/12/1899)
         const millisecondsPerDay = 24 * 60 * 60 * 1000;
         const date = new Date(excelEpoch.getTime() + serial * millisecondsPerDay);
         return date.toISOString();
       }
 
+      /**
+       * Aplica conversão de datas do Excel em objetos
+       * @param {Object} obj - Objeto com possíveis datas no formato Excel
+       * @returns {Object} - Objeto com datas convertidas para formato ISO
+       */
       function convertExcelDates(obj) {
         const result = {};
         for (const [key, value] of Object.entries(obj)) {
+          // Verifica se é um número que pode representar uma data do Excel
           if (typeof value === 'number' && value > 25567 && value < 50000) {
             result[key] = excelSerialToDateString(value);
           } else if (typeof value === 'number' && key.toLowerCase().includes('timestamp')) {
@@ -207,113 +254,152 @@
         }
         return result;
       }
+
+      // ===== FUNÇÕES DE COMUNICAÇÃO COM A API =====
+      
+      /**
+       * Envia dados para a API via método POST
+       * @param {string} url - Endpoint da API
+       * @param {Object} data - Dados a serem enviados
+       * @returns {Promise} - Promise com a resposta da API
+       */
       async function postData(url, data) {
         const response = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
         return response.json();
       }
 
+      /**
+       * Monta o ID completo do teste combinando prefixo e número
+       * @returns {string} - ID completo do teste no formato "TEST-XXXX"
+       */
       function getFullTestId() {
         const num = document.getElementById("testNumber").value.trim();
         return "TEST-" + num;
       }
+
+      // ===== FUNÇÕES DE PROCESSAMENTO DE ARQUIVOS =====
+      
+      /**
+       * Lê arquivo CSV, JSON ou XLSX e retorna array de objetos
+       * @param {File} file - Arquivo a ser processado
+       * @param {boolean} sendAll - Se deve retornar todas as linhas ou apenas a primeira
+       * @returns {Promise<Array>} - Promise com array de objetos dos dados do arquivo
+       */
       async function readFileAsJson(file, sendAll) {
         const extension = file.name.split('.').pop().toLowerCase();
+
+        // Processamento de arquivos JSON
         if (extension === "json") {
           const text = await file.text();
           const data = JSON.parse(text);
           return Array.isArray(data) ? data : [data];
         }
+
+        // Processamento de arquivos CSV
         if (extension === "csv") {
           const text = await file.text();
           const lines = text.trim().split("\n");
           const headers = lines[0].split(",").map(h => h.trim());
           if (lines.length < 2) throw new Error("O CSV está vazio ou sem dados.");
+          
           const rows = lines.slice(1).map(line => {
             const values = line.split(",").map(v => v.trim());
             const rawData = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
             return convertTypes(convertExcelDates(rawData));
           });
+          
           return sendAll ? rows : [rows[0]];
         }
+
+        // Processamento de arquivos XLSX (Excel)
         if (extension === "xlsx") {
           const data = await file.arrayBuffer();
-          const workbook = XLSX.read(data, {
-            type: "array"
-          });
+          const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
-          const rows = XLSX.utils.sheet_to_json(sheet, {
-            raw: false,
-            dateNF: 'yyyy-mm-dd HH:MM:ss'
-          });
+          const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: 'yyyy-mm-dd HH:MM:ss' });
+          
           if (!rows.length) throw new Error("O arquivo XLSX está vazio.");
           const converted = rows.map(r => convertTypes(convertExcelDates(r)));
           return sendAll ? converted : [converted[0]];
         }
+
         throw new Error("Formato de arquivo não suportado (use .csv, .xlsx ou .json)");
       }
+
+      // ===== EVENT LISTENERS PARA OS BOTÕES =====
+      
+      /**
+       * Botão para salvar - executa operação de invoke na blockchain
+       * Processa o arquivo selecionado e envia os dados para a API
+       */
       document.getElementById("saveBtn").addEventListener("click", async () => {
-      const fileInput = document.getElementById("fileInput");
-      const sendAll = document.getElementById("sendAllRows").checked;
+        const fileInput = document.getElementById("fileInput");
+        const sendAll = document.getElementById("sendAllRows").checked;
 
-      if (fileInput.files.length === 0) {
-        alert("Selecione um arquivo primeiro!");
-        return;
-      }
-
-      try {
-        const file = fileInput.files[0];
-        const dataArray = await readFileAsJson(file, sendAll);
-
-        for (let i = 0; i < dataArray.length; i++) {
-          const data = dataArray[i];
-          let testID =
-            data.test_id ||
-            data.TestID ||
-            data["TEST ID"] ||
-            data["test ID"] ||
-            null;
-
-          if (!testID) {
-            testID = `TEST-${i + 1}`;
-            console.warn(`TestID não encontrado na linha ${i + 1}. Usando ${testID}`);
-          }
-
-          const body = { testID, data };
-          const result = await postData("/invoke", body);
-          console.log(`Linha ${i + 1}:`, result);
-
-          if (!sendAll) break;
-          if (i < dataArray.length - 1) {
-            const cont = confirm(`Linha ${i + 1} enviada (ID: ${testID}). Deseja enviar a próxima (${i + 2}/${dataArray.length})?`);
-            if (!cont) {
-              alert("Envio interrompido pelo usuário.");
-              break;
-            }
-          }
+        // Valida se um arquivo foi selecionado
+        if (fileInput.files.length === 0) {
+          alert("Selecione um arquivo primeiro!");
+          return;
         }
 
-        alert("Envio concluído!");
-      } catch (err) {
-        console.error(err);
-        alert("Erro ao processar o arquivo: " + err.message);
-      }
-    });
-      // Botão de busca
+        try {
+          const file = fileInput.files[0];
+          const dataArray = await readFileAsJson(file, sendAll);
+
+          // Processa cada linha do arquivo
+          for (let i = 0; i < dataArray.length; i++) {
+            const data = dataArray[i];
+            
+            // Tenta extrair o testID de diferentes formatos possíveis
+            let testID = data.test_id || data.TestID || data["TEST ID"] || data["test ID"] || null;
+            
+            // Se não encontrou testID, gera um automático
+            if (!testID) {
+              testID = `TEST-${i + 1}`;
+              console.warn(`TestID não encontrado na linha ${i + 1}. Usando ${testID}`);
+            }
+
+            const body = { testID, data };
+            const result = await postData("/invoke", body);
+            console.log(`Linha ${i + 1}:`, result);
+
+            // Se não é para enviar tudo, para após a primeira linha
+            if (!sendAll) break;
+            
+            // Se é para enviar tudo, pergunta confirmação para próxima linha (exceto a última)
+            if (i < dataArray.length - 1) {
+              const cont = confirm(`Linha ${i + 1} enviada (ID: ${testID}). Deseja enviar a próxima (${i + 2}/${dataArray.length})?`);
+              if (!cont) {
+                alert("Envio interrompido pelo usuário.");
+                break;
+              }
+            }
+          }
+
+          alert("Envio concluído!");
+        } catch (err) {
+          console.error(err);
+          alert("Erro ao processar o arquivo: " + err.message);
+        }
+      });
+
+      /**
+       * Botão de busca - executa operação de query na blockchain
+       * Busca testes na blockchain com base nos critérios selecionados
+       */
       document.getElementById("searchBtn").addEventListener("click", async () => {
         const testID = getFullTestId();
         const searchAll = document.getElementById("searchAll").checked;
+        
+        // Define a função a ser chamada na blockchain
         const fcn = searchAll ? "GetAllTests" : "QueryTest";
-        const body = {
-          fcn,
-          testID
-        };
+        const body = { fcn, testID };
+        
         const result = await postData("/query", body);
         console.log("Resultado da busca:", result);
         alert(JSON.stringify(result, null, 2));

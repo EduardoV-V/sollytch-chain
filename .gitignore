@@ -36,6 +36,7 @@ Thumbs.db
 *.swo
 .vscode/
 .idea/
+*.Identifier
 
 # Environment files
 .env
