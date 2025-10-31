@@ -120,7 +120,7 @@ install_fabric(){
     sudo chown "$USER":"$USER" "$FABRIC_DIR"
     cd "$FABRIC_DIR"
 
-    curl -sSLO -k "$SCRIPT_URL"
+    curl -k -sSLO "$SCRIPT_URL"
     chmod +x install-fabric.sh
 
     ./install-fabric.sh binary docker samples
