@@ -44,10 +44,7 @@ install_go() {
     
     # Recarrega o bashrc
     source ~/.bashrc
-    
-    # Limpa o arquivo baixado
-    rm $FILE
-    
+
     echo "Go instalado com sucesso"
 }
 
