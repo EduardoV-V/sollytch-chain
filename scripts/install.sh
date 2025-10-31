@@ -34,7 +34,6 @@ check_go_version() {
 install_go() {
     echo "Instalando Go 1.21+..."
     
-     rm -rf /usr/local/go && tar -C /usr/local -xzf go1.25.3.linux-amd64.tar.gz
     LATEST=$(curl -s https://go.dev/VERSION?m=text)
     FILE="${LATEST}.linux-amd64.tar.gz"
 
