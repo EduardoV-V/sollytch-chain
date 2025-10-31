@@ -34,13 +34,7 @@ check_go_version() {
 install_go() {
     echo "Instalando Go 1.21+..."
     
-    LATEST=$(curl -s https://go.dev/VERSION?m=text)
-    FILE="${LATEST}.linux-amd64.tar.gz"
-
-    # Baixa e instala
-    wget -q "https://go.dev/dl/${FILE}" -O "/tmp/${FILE}"
-    sudo rm -rf /usr/local/go
-    sudo tar -C /usr/local -xzf "/tmp/${FILE}"
+    sudo snap install go --classic
 
     # Configura PATH (se ainda não estiver configurado)
     if ! grep -q '/usr/local/go/bin' ~/.bashrc; then
