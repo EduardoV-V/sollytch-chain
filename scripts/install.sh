@@ -4,6 +4,8 @@ set -e
 
 echo "Iniciando instalação de dependências"
 
+FABRIC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Função para verificar se um comando existe
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -109,29 +111,27 @@ install_docker() {
 
     echo "Docker e Docker Compose instalados"
 }
-
-install_fabric(){
-    FABRIC_DIR="/usr/local/fabric"
-    FABRIC_BIN_DIR="$FABRIC_DIR/bin"
+install_fabric() {
+    FABRIC_INSTALL_DIR="/usr/local/fabric"
+    FABRIC_BIN_DIR="$FABRIC_INSTALL_DIR/bin"
     SCRIPT_URL="https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh"
 
-    # Criar diretório e dar permissão ao usuário atual
-    sudo mkdir -p "$FABRIC_DIR"
-    sudo chown "$USER":"$USER" "$FABRIC_DIR"
-    cd "$FABRIC_DIR"
+    sudo mkdir -p "$FABRIC_INSTALL_DIR"
+    sudo chown "$USER":"$USER" "$FABRIC_INSTALL_DIR"
+    cd "$FABRIC_INSTALL_DIR"
 
-    curl -k -sSLO "$SCRIPT_URL"
+    curl -sSLO "$SCRIPT_URL"
     chmod +x install-fabric.sh
 
-    ./install-fabric.sh binary docker samples
+    ./install-fabric.sh b
 
-    # Configurar PATH global para todos os usuários
     if ! grep -q "$FABRIC_BIN_DIR" /etc/profile; then
         echo "export PATH=\$PATH:$FABRIC_BIN_DIR" | sudo tee -a /etc/profile
     fi
 
-    # Aplicar PATH imediatamente para este terminal
     export PATH=$PATH:$FABRIC_BIN_DIR
+
+    cd "$FABRIC_DIR"
 }
 
 # Função para instalar dependências do projeto
