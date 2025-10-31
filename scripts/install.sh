@@ -101,6 +101,7 @@ install_docker() {
 
     echo "Docker e Docker Compose instalados"
 }
+
 install_fabric() {
     FABRIC_INSTALL_DIR="/usr/local/fabric"
     FABRIC_BIN_DIR="$FABRIC_INSTALL_DIR/bin"
@@ -196,6 +197,8 @@ install_fabric
 echo ""
 echo "5. Instalando dependências do projeto..."
 install_project_dependencies
+
+source /etc/profile
 
 # Verifica se o Docker foi instalado durante o script
 DOCKER_INSTALADO=false
