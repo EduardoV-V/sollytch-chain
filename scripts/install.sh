@@ -5,6 +5,7 @@ set -e
 echo "Iniciando instalação de dependências"
 
 FABRIC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "$FABRIC_DIR"
 
 # Função para verificar se um comando existe
 command_exists() {
@@ -133,7 +134,7 @@ install_project_dependencies() {
     if [ -d "chaincode" ]; then
         echo "Instalando dependências do chaincode..."
         cd chaincode
-        go mod vendor
+        go work vendor
         cd ..
     else
         echo "Diretório 'chaincode' não encontrado"
@@ -143,17 +144,15 @@ install_project_dependencies() {
     if [ -d "ccapi" ]; then
         echo "Instalando dependências da ccapi..."
         cd ccapi
-        go mod vendor
+        go work vendor
         cd ..
     else
         echo "Diretório 'ccapi' não encontrado"
     fi
     
-    # Instala dependências Node.js se houver package.json
-    if [ -f "package.json" ]; then
-        echo "Instalando dependências Node.js..."
-        npm install
-    fi
+    # Instala dependências Node.js
+    cd client
+    npm i
     
     # Instala dependências do app se existir
     if [ -d "app" ] && [ -f "app/package.json" ]; then
@@ -192,10 +191,12 @@ fi
 
 echo ""
 echo "4. Instalando binários do fabric"
-install_fabric
+# install_fabric
+cd "$FABRIC_DIR"
 
 echo ""
 echo "5. Instalando dependências do projeto..."
+cd ..
 install_project_dependencies
 
 source /etc/profile
