@@ -104,9 +104,34 @@ install_docker() {
     sudo snap install docker
     
     # Adiciona usuário ao grupo docker
+    sudo groupadd docker
     sudo usermod -aG docker $USER
-    
+
     echo "Docker e Docker Compose instalados"
+}
+
+install_fabric(){
+    FABRIC_DIR="/usr/local/fabric"
+    FABRIC_BIN_DIR="$FABRIC_DIR/bin"
+    SCRIPT_URL="https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh"
+
+    # Criar diretório e dar permissão ao usuário atual
+    sudo mkdir -p "$FABRIC_DIR"
+    sudo chown "$USER":"$USER" "$FABRIC_DIR"
+    cd "$FABRIC_DIR"
+
+    curl -sSLO "$SCRIPT_URL"
+    chmod +x install-fabric.sh
+
+    ./install-fabric.sh binary docker samples
+
+    # Configurar PATH global para todos os usuários
+    if ! grep -q "$FABRIC_BIN_DIR" /etc/profile; then
+        echo "export PATH=\$PATH:$FABRIC_BIN_DIR" | sudo tee -a /etc/profile
+    fi
+
+    # Aplicar PATH imediatamente para este terminal
+    export PATH=$PATH:$FABRIC_BIN_DIR
 }
 
 # Função para instalar dependências do projeto
@@ -175,7 +200,11 @@ if ! check_docker; then
 fi
 
 echo ""
-echo "4. Instalando dependências do projeto..."
+echo "4. Instalando binários do fabric"
+install_fabric
+
+echo ""
+echo "5. Instalando dependências do projeto..."
 install_project_dependencies
 
 # Verifica se o Docker foi instalado durante o script
