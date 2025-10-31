@@ -32,24 +32,26 @@ check_go_version() {
 install_go() {
     echo "Instalando Go 1.21+..."
     
-    # Download do Go
-    wget https://golang.org/dl/go1.21.6.linux-amd64.tar.gz
-    
-    # Remove instalação anterior se existir
+     rm -rf /usr/local/go && tar -C /usr/local -xzf go1.25.3.linux-amd64.tar.gz
+    LATEST=$(curl -s https://go.dev/VERSION?m=text)
+    FILE="${LATEST}.linux-amd64.tar.gz"
+
+    # Baixa e instala
+    wget -q "https://go.dev/dl/${FILE}" -O "/tmp/${FILE}"
     sudo rm -rf /usr/local/go
-    
-    # Extrai para /usr/local
-    sudo tar -C /usr/local -xzf go1.21.6.linux-amd64.tar.gz
-    
-    # Adiciona ao PATH
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-    echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.bashrc
+    sudo tar -C /usr/local -xzf "/tmp/${FILE}"
+
+    # Configura PATH (se ainda não estiver configurado)
+    if ! grep -q '/usr/local/go/bin' ~/.bashrc; then
+        echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+    fi
+    export PATH=$PATH:/usr/local/go/bin
     
     # Recarrega o bashrc
     source ~/.bashrc
     
     # Limpa o arquivo baixado
-    rm go1.21.6.linux-amd64.tar.gz
+    rm $FILE
     
     echo "Go instalado com sucesso"
 }
@@ -62,17 +64,21 @@ install_nodejs() {
     if ! command_exists curl; then
         sudo apt-get update && sudo apt-get install -y curl
     fi
-    
-    # Instala Node.js 18 LTS
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-    
-    # Verifica a instalação
-    NODE_VERSION=$(node --version)
-    NPM_VERSION=$(npm --version)
-    
-    echo "Node.js $NODE_VERSION instalado"
-    echo "npm $NPM_VERSION instalado"
+
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+
+    # in lieu of restarting the shell
+    \. "$HOME/.nvm/nvm.sh"
+
+    # Download and install Node.js:
+    nvm install 24
+
+    # Verify the Node.js version:
+    node -v
+
+    # Verify npm version:
+    npm -v
+
 }
 
 # Função para verificar Docker
@@ -95,18 +101,10 @@ install_docker() {
     echo "Instalando Docker e Docker Compose..."
     
     # Instala Docker
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
+    sudo snap install docker
     
     # Adiciona usuário ao grupo docker
     sudo usermod -aG docker $USER
-    
-    # Instala Docker Compose
-    sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-    
-    # Limpa arquivo de instalação
-    rm get-docker.sh
     
     echo "Docker e Docker Compose instalados"
 }
