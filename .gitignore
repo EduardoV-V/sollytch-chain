@@ -1,13 +1,14 @@
 # Fabric-generated files
-organizations/
-channel-artifacts/
-crypto-config/
-system-genesis-block/
-ledger/
-wallet/
-tmp/
-fabric-samples/
+fabric/crypto-config
+fabric/channel-artifacts
+fabric/ca
 fabric/bin
+fabric/builders
+chaincode/vendor/*
+chaincode/collections.json
+ccapi/vendor/*
+cc-tools-demo.tar.gz
+package-lock.json
 
 # Docker stuff
 *.log
@@ -21,7 +22,7 @@ docker/
 *.pid
 
 # Node modules and Go build outputs
-node_modules/
+client/node_modules
 build/
 dist/
 vendor/
