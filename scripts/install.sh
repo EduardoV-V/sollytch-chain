@@ -191,7 +191,7 @@ fi
 
 echo ""
 echo "4. Instalando binários do fabric"
-# install_fabric
+install_fabric
 cd "$FABRIC_DIR"
 
 echo ""
