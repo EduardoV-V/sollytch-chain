@@ -42,6 +42,7 @@ install_go() {
         echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
     fi
     export PATH=$PATH:/usr/local/go/bin
+    export GOWORK=off
     
     # Recarrega o bashrc
     source ~/.bashrc
@@ -134,7 +135,8 @@ install_project_dependencies() {
     if [ -d "chaincode" ]; then
         echo "Instalando dependências do chaincode..."
         cd chaincode
-        go work vendor
+        go mod tidy
+        go mod vendor
         cd ..
     else
         echo "Diretório 'chaincode' não encontrado"
@@ -144,7 +146,8 @@ install_project_dependencies() {
     if [ -d "ccapi" ]; then
         echo "Instalando dependências da ccapi..."
         cd ccapi
-        go work vendor
+        go mod tidy
+        go mod vendor
         cd ..
     else
         echo "Diretório 'ccapi' não encontrado"
