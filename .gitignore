@@ -14,3 +14,13 @@ package-lock.json
 .DS_Store
 
 *Identifier
+
+# Vendor directories - não versionar dependências do Go
+vendor/
+
+# Secret files
+*appveyor.yml
+*slack*
+*webhook*
+*.env
+.env.local
