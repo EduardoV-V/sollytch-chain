@@ -133,4 +133,10 @@ async function disconnect(){
     client.close();
 }
 
-module.exports = { initialize, disconnect, query, invoke }
+//exporta as funções para acesso na api
+module.exports = {
+    initialize,
+    disconnect,
+    invoke,
+    query,
+}
