@@ -18,6 +18,9 @@ const port = 3000; // porta do servidor
 app.use(bodyParser.json()); // ativa o body parser
 
 // define diretorios estaticos
+app.get('/teste', (req, res) => {
+  return res.status(200).json({ message: 'Chamada efetuada com sucesso' });
+});
 app.use('/resources', express.static(path.join(__dirname, 'resources')));
 app.use(express.static(path.join(__dirname, 'views')));
 app.use(bodyParser.json());
@@ -45,15 +48,6 @@ app.post('/invoke', async (req, res) => {
   } catch (error) {
     console.error('Erro ao invocar transação:', error); // loga erro
     await disconnect(); // garante desconexao caso caia em erro
-    return res.status(500).json({ message: 'Falha ao executar a transação.' });
-  }
-});
-
-app.post('/teste', async (req, res) => {
-  try {
-    return res.status(200).json({ message: 'Chamada efetuada com sucesso' });
-  } catch (error) {
-    console.error('Erro ao invocar transação:', error); // loga erro
     return res.status(500).json({ message: 'Falha ao executar a transação.' });
   }
 });

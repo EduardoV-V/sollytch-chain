@@ -59,6 +59,91 @@ const peerHostAlias = ('peer0.org1.example.com');
 
 const utf8Decoder = new TextDecoder();
 
+const controleInternoEncoder = {
+    'ok': 2,
+    'fail': 1,
+    'invalid': 0
+};
+
+function preprocessForPrediction(testData) {
+    console.log("Processando dados para predição...");
+    
+    // 1. IDENTIFICAR FEATURES (igual ao Python)
+    const numericFeatures = [
+        'expiry_days_left', 'distance_mm', 'time_to_migrate_s', 'sample_volume_uL',
+        'sample_pH', 'sample_turbidity_NTU', 'sample_temp_C', 'ambient_T_C',
+        'ambient_RH_pct', 'lighting_lux', 'tilt_deg', 'preincubation_time_s',
+        'time_since_sampling_min', 'tempo_transporte_horas', 'estimated_concentration_ppb',
+        'incerteza_estimativa_ppb'
+    ];
+    
+    const categoricalFeatures = ['control_line_ok', 'controle_interno_result'];
+    const allFeatures = [...numericFeatures, ...categoricalFeatures];
+    
+    console.log(`🔧 Features selecionadas: ${allFeatures.length}`);
+    
+    // 2. CODIFICAR VARIÁVEIS CATEGÓRICAS (igual ao LabelEncoder do Python)
+    const processedData = {...testData};
+    
+    // Converter booleanos para inteiros
+    if (typeof processedData.control_line_ok === 'boolean') {
+        processedData.control_line_ok = processedData.control_line_ok ? 1 : 0;
+        console.log(`Booleano convertido: control_line_ok → ${processedData.control_line_ok}`);
+    }
+    
+    // Codificar controle_interno_result
+    if (processedData.controle_interno_result in controleInternoEncoder) {
+        processedData.controle_interno_result = controleInternoEncoder[processedData.controle_interno_result];
+        console.log(`Codificada 'controle_interno_result': ${testData.controle_interno_result} → ${processedData.controle_interno_result}`);
+    } else {
+        processedData.controle_interno_result = 0; // valor padrão
+        console.log(`Valor desconhecido 'controle_interno_result': ${testData.controle_interno_result} → 0`);
+    }
+    
+    // 3. TRATAR VALORES NULOS (igual ao Python fillna(0))
+    allFeatures.forEach(feature => {
+        if (processedData[feature] === null || processedData[feature] === undefined) {
+            processedData[feature] = 0;
+            console.log(`Preenchido valor nulo: ${feature} → 0`);
+        }
+    });
+    
+    // 4. TRATAR image_blur_score (null para 0)
+    if (processedData.image_blur_score === null || processedData.image_blur_score === undefined) {
+        processedData.image_blur_score = 0.0;
+    }
+    
+    // 5. CRIAR STRING CSV NO FORMATO ESPERADO
+    const csvData = [
+        processedData.lat,
+        processedData.lon,
+        processedData.expiry_days_left,
+        processedData.distance_mm,
+        processedData.time_to_migrate_s,
+        processedData.sample_volume_uL,
+        processedData.sample_pH,
+        processedData.sample_turbidity_NTU,
+        processedData.sample_temp_C,
+        processedData.ambient_T_C,
+        processedData.ambient_RH_pct,
+        processedData.lighting_lux,
+        processedData.tilt_deg,
+        processedData.preincubation_time_s,
+        processedData.time_since_sampling_min,
+        processedData.image_blur_score,
+        processedData.tempo_transporte_horas,
+        processedData.estimated_concentration_ppb,
+        processedData.incerteza_estimativa_ppb,
+        processedData.control_line_ok,
+        processedData.controle_interno_result
+    ].join(',');
+    
+    console.log("Dados pré-processados com sucesso");
+    console.log(`CSV gerado: ${csvData}`);
+    
+    return csvData;
+}
+
 main().catch((error) => {
     console.error('******** FAILED to run the application:', error);
     process.exitCode = 1;
@@ -95,14 +180,24 @@ async function newSigner() {
 }
 
 async function invoke(contract) {
-    const jsonFilePath = path.join(__dirname, 'test.json')
+    const jsonFilePath = require('path').join(__dirname, 'test.json');
     const testData = JSON.parse(fsRead.readFileSync(jsonFilePath, 'utf8'));
     const testID = testData.test_id;
+    
+    // Pré-processar os dados
+    // const predictStr = preprocessForPrediction(testData);
+    const predictStr = '-22.86292,-43.236546,478,19.56,540.8,65.8,7.57,11.5,25.2,24.1,72.6,327.8,0.3,23.0,80.2,0.0,8.82,24.16,3.15,1,2'
+    
+    // String JSON original
     const jsonStr = JSON.stringify(testData);
-    await contract.submitTransaction("StoreTest", testID, jsonStr)
-    console.log("teste armazenado com sucesso")
-}
 
+    try {
+        await contract.submitTransaction("StoreTest", testID, jsonStr, predictStr);
+        console.log("Teste armazenado com sucesso");
+    } catch (error) {
+        console.error("Erro:", error);
+    }
+}
 async function query(contract, testID) {
     try {
         console.log(`consultando teste com ID: ${testID}`);
