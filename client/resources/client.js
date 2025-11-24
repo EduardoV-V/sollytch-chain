@@ -39,6 +39,91 @@ const tlsCertPath = path.resolve(cryptoPath,
     'tls',
     'ca.crt');
 
+    const controleInternoEncoder = {
+    'ok': 2,
+    'fail': 1,
+    'invalid': 0
+};
+
+function preprocessForPrediction(testData) {
+    console.log("Processando dados para predição...");
+    
+    // 1. IDENTIFICAR FEATURES (igual ao Python)
+    const numericFeatures = [
+        'expiry_days_left', 'distance_mm', 'time_to_migrate_s', 'sample_volume_uL',
+        'sample_pH', 'sample_turbidity_NTU', 'sample_temp_C', 'ambient_T_C',
+        'ambient_RH_pct', 'lighting_lux', 'tilt_deg', 'preincubation_time_s',
+        'time_since_sampling_min', 'tempo_transporte_horas', 'estimated_concentration_ppb',
+        'incerteza_estimativa_ppb'
+    ];
+    
+    const categoricalFeatures = ['control_line_ok', 'controle_interno_result'];
+    const allFeatures = [...numericFeatures, ...categoricalFeatures];
+    
+    console.log(`🔧 Features selecionadas: ${allFeatures.length}`);
+    
+    // 2. CODIFICAR VARIÁVEIS CATEGÓRICAS (igual ao LabelEncoder do Python)
+    const processedData = {...testData};
+    
+    // Converter booleanos para inteiros
+    if (typeof processedData.control_line_ok === 'boolean') {
+        processedData.control_line_ok = processedData.control_line_ok ? 1 : 0;
+        console.log(`Booleano convertido: control_line_ok → ${processedData.control_line_ok}`);
+    }
+    
+    // Codificar controle_interno_result
+    if (processedData.controle_interno_result in controleInternoEncoder) {
+        processedData.controle_interno_result = controleInternoEncoder[processedData.controle_interno_result];
+        console.log(`Codificada 'controle_interno_result': ${testData.controle_interno_result} → ${processedData.controle_interno_result}`);
+    } else {
+        processedData.controle_interno_result = 0; // valor padrão
+        console.log(`Valor desconhecido 'controle_interno_result': ${testData.controle_interno_result} → 0`);
+    }
+    
+    // 3. TRATAR VALORES NULOS (igual ao Python fillna(0))
+    allFeatures.forEach(feature => {
+        if (processedData[feature] === null || processedData[feature] === undefined) {
+            processedData[feature] = 0;
+            console.log(`Preenchido valor nulo: ${feature} → 0`);
+        }
+    });
+    
+    // 4. TRATAR image_blur_score (null para 0)
+    if (processedData.image_blur_score === null || processedData.image_blur_score === undefined) {
+        processedData.image_blur_score = 0.0;
+    }
+    
+    // 5. CRIAR STRING CSV NO FORMATO ESPERADO
+    const csvData = [
+        processedData.lat,
+        processedData.lon,
+        processedData.expiry_days_left,
+        processedData.distance_mm,
+        processedData.time_to_migrate_s,
+        processedData.sample_volume_uL,
+        processedData.sample_pH,
+        processedData.sample_turbidity_NTU,
+        processedData.sample_temp_C,
+        processedData.ambient_T_C,
+        processedData.ambient_RH_pct,
+        processedData.lighting_lux,
+        processedData.tilt_deg,
+        processedData.preincubation_time_s,
+        processedData.time_since_sampling_min,
+        processedData.image_blur_score,
+        processedData.tempo_transporte_horas,
+        processedData.estimated_concentration_ppb,
+        processedData.incerteza_estimativa_ppb,
+        processedData.control_line_ok,
+        processedData.controle_interno_result
+    ].join(',');
+    
+    console.log("Dados pré-processados com sucesso");
+    console.log(`CSV gerado: ${csvData}`);
+    
+    return csvData;
+}
+
 // endereco e alias (nome) do peer
 const peerEndpoint = ('localhost:7051');
 const peerHostAlias = ('peer0.org1.example.com');
@@ -82,10 +167,20 @@ async function newSigner() {
 // executa uma transacao no ledger
 // pra executar uma função do chaincode, é usada a função "submitTransaction" da API do hyperledger fabric. No caso desse cliente,
 // a função a ser chamada está como hard coded, mas basta mudar o "StoreTest" para uma função ou outro nome
+// async function invoke(jsonString, testID) {
+//   await contract.submitTransaction("StoreTest", testID, jsonString) // Chama a função "StoreTest" com os parâmetros testID e jsonString
+//   // é importantissimo passar os parâmetros na mesma ordem do chaincode, caso contrário dará erro.
+//   console.log(`Teste ${testID} armazenado com sucesso no ledger.`); // log de confirmação
+// }
+
 async function invoke(jsonString, testID) {
-  await contract.submitTransaction("StoreTest", testID, jsonString) // Chama a função "StoreTest" com os parâmetros testID e jsonString
-  // é importantissimo passar os parâmetros na mesma ordem do chaincode, caso contrário dará erro.
-  console.log(`Teste ${testID} armazenado com sucesso no ledger.`); // log de confirmação
+    const predictStr = preprocessForPrediction(jsonString);
+    try {
+        await contract.submitTransaction("StoreTest", testID, jsonString, predictStr);
+        console.log("Teste armazenado com sucesso");
+    } catch (error) {
+        console.error("Erro:", error);
+    }
 }
 
 // inicializa a conexao e define o contrato

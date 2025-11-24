@@ -123,6 +123,16 @@ func trainModel(csvData string) (*trees.ID3DecisionTree, error) {
     return model, nil
 }
 
+func buildHeader(target string) string {
+    baseHeader := "lat,lon,expiry_days_left,distance_mm,time_to_migrate_s," +
+        "sample_volume_uL,sample_pH,sample_turbidity_NTU,sample_temp_C,ambient_T_C," +
+        "ambient_RH_pct,lighting_lux,tilt_deg,preincubation_time_s,time_since_sampling_min," +
+        "image_blur_score,tempo_transporte_horas,estimated_concentration_ppb," +
+        "incerteza_estimativa_ppb,control_line_ok,controle_interno_result"
+
+    return baseHeader + "," + target
+}
+
 // StoreTest armazena um registro de teste no ledger do blockchain
 func (s *SmartContract) StoreTest(ctx contractapi.TransactionContextInterface, testID string, jsonStr string, predictStr string) error {
     Train()
@@ -132,7 +142,6 @@ func (s *SmartContract) StoreTest(ctx contractapi.TransactionContextInterface, t
         return fmt.Errorf("erro ao decodificar JSON: %v", err)
     }
 
-    // Validar testID
     if record.TestID == "" {
         record.TestID = testID
     } else if record.TestID != testID {
@@ -142,30 +151,44 @@ func (s *SmartContract) StoreTest(ctx contractapi.TransactionContextInterface, t
 	if modeloAcao == nil || modeloResult == nil || modeloQc == nil {
 		fmt.Println("Modelos não encontrados")
 	}
-	fmt.Printf("modelo acao: %v", modeloAcao)
 
-	header := "lat,lon,expiry_days_left,distance_mm,time_to_migrate_s,sample_volume_uL,sample_pH,sample_turbidity_NTU,sample_temp_C,ambient_T_C,ambient_RH_pct,lighting_lux,tilt_deg,preincubation_time_s,time_since_sampling_min,image_blur_score,tempo_transporte_horas,estimated_concentration_ppb,incerteza_estimativa_ppb,control_line_ok,controle_interno_result"
-    fullCSV := header + "\n" + predictStr
-
-    predictionData, err := loadDataset(fullCSV)
+	headerAcao := buildHeader("acao_recomendada")
+    fullCSV := headerAcao + "\n" + predictStr + ",?"
+    predictionDataAcao, err := loadDataset(fullCSV)
 	
-	acao, err := modeloAcao.Predict(predictionData)
+	acao, err := modeloAcao.Predict(predictionDataAcao)
     if err != nil {
         return fmt.Errorf("erro ao fazer previsões: %v", err)
     }
 
-	fmt.Printf("Acao recomendada: %v", acao)
+	acaoPred := acao.RowString(0)
+	record.AcaoRecomendada = acaoPred
+
+	headerResult := buildHeader("result_class")
+	fullCSV = headerResult + "\n" + predictStr + ",?"
+
+    predictionDataResult, err := loadDataset(fullCSV)
 	
-	// result, err := modeloResult.Predict(predictionData)
-    // if err != nil {
-    //     return fmt.Errorf("erro ao fazer previsões: %v", err)
-    // }
+	result, err := modeloResult.Predict(predictionDataResult)
+    if err != nil {
+        return fmt.Errorf("erro ao fazer previsões: %v", err)
+    }
 
-	// qcStatus, err := modeloQc.Predict(predictionData)
-    // if err != nil {
-    //     return fmt.Errorf("erro ao fazer previsões: %v", err)
-    // }
+	resultPred := result.RowString(0)
+	record.ResultClass = resultPred
 
+	header := buildHeader("qc_status")
+	fullCSV = header + "\n" + predictStr + ",?"
+
+    predictionDataStatus, err := loadDataset(fullCSV)
+
+	qcStatus, err := modeloQc.Predict(predictionDataStatus)
+    if err != nil {
+        return fmt.Errorf("erro ao fazer previsões: %v", err)
+    }
+
+	qcStatusPred := qcStatus.RowString(0)
+	record.QCStatus = qcStatusPred
 
     recordBytes, err := json.Marshal(record)
     if err != nil {
@@ -177,7 +200,6 @@ func (s *SmartContract) StoreTest(ctx contractapi.TransactionContextInterface, t
 
 // QueryTest recupera um registro de teste específico pelo ID
 func (s *SmartContract) QueryTest(ctx contractapi.TransactionContextInterface, testID string) (*TestRecord, error) {
-	// Busca os dados do ledger pela chave testID
 	recordBytes, err := ctx.GetStub().GetState(testID)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao ler do ledger: %v", err)
@@ -186,7 +208,6 @@ func (s *SmartContract) QueryTest(ctx contractapi.TransactionContextInterface, t
 		return nil, fmt.Errorf("teste %s não encontrado", testID)
 	}
 
-	// Converte os bytes do ledger para a estrutura TestRecord
 	var record TestRecord
 	err = json.Unmarshal(recordBytes, &record)
 	if err != nil {

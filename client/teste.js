@@ -183,10 +183,10 @@ async function invoke(contract) {
     const jsonFilePath = require('path').join(__dirname, 'test.json');
     const testData = JSON.parse(fsRead.readFileSync(jsonFilePath, 'utf8'));
     const testID = testData.test_id;
+    console.log(testID)
     
     // Pré-processar os dados
-    // const predictStr = preprocessForPrediction(testData);
-    const predictStr = '-22.86292,-43.236546,478,19.56,540.8,65.8,7.57,11.5,25.2,24.1,72.6,327.8,0.3,23.0,80.2,0.0,8.82,24.16,3.15,1,2'
+    const predictStr = preprocessForPrediction(testData);
     
     // String JSON original
     const jsonStr = JSON.stringify(testData);
@@ -198,6 +198,7 @@ async function invoke(contract) {
         console.error("Erro:", error);
     }
 }
+
 async function query(contract, testID) {
     try {
         console.log(`consultando teste com ID: ${testID}`);
