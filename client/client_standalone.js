@@ -53,12 +53,6 @@ const tlsCertPath = path.resolve(
     'ca.crt'
 );
 
-function hashImage(path) {
-  const fileBuffer = fs.readFileSync(path);
-  const hash = crypto.createHash("sha512").update(fileBuffer).digest("hex");
-  return hash;
-}
-
 // Gateway peer endpoint.
 const peerEndpoint = ('localhost:7051');
 
@@ -103,7 +97,6 @@ async function newSigner() {
 }
 
 async function storeImageHash(imagePath, imageID) {
-    const imageHash = hashImage(imagePath)
     await contract.submitTransaction(
         "StoreImage",
         imageID,
@@ -200,7 +193,7 @@ module.exports={
 
 async function run(){
     await initialize()
-    await storeImageHash('imagem.png', '2')
+    await storeImageHash('hash', '2')
     const hash = await getImageHash('2')
     console.log(hash)
     await endConnection()
