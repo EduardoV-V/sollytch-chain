@@ -19,38 +19,28 @@ const mspId = ('org1MSP');
 let network, contract, client, gateway
 
 // Path to crypto materials.
-const cryptoPath = path.resolve(
-    __dirname,
-    '..',
-    'fabric',
-    'organizations',
-    'peerOrganizations',
-    'org1.example.com'
-);
+    const cryptoPath = path.resolve(
+        __dirname,
+        'crypto_test'
+    );
 
-const keyDirectoryPath = path.resolve(
-    cryptoPath,
-    'users',
-    'Admin@org1.example.com',
-    'msp',
-    'keystore'
-);
+    const keyDirectoryPath = path.resolve(
+        cryptoPath,
+        "User1@org1.example.com",
+        'keystore'
+    );
 
-const certDirectoryPath = path.resolve(
-    cryptoPath,
-    'users',
-    'Admin@org1.example.com',
-    'msp',
-    'signcerts'
-);
+    const certDirectoryPath = path.resolve(
+        cryptoPath,
+        "User1@org1.example.com",
+        'signcerts'
+    );
 
-const tlsCertPath = path.resolve(
-    cryptoPath,
-    'peers',
-    'peer0.org1.example.com',
-    'tls',
-    'ca.crt'
-);
+    const tlsCertPath = path.resolve(
+        cryptoPath,
+        'peer0.org1.example.com',
+        'ca.crt'
+    );
 
 function hashImage(path) {
   const fileBuffer = fs.readFileSync(path);

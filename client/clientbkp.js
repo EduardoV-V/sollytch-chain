@@ -20,31 +20,35 @@
     // Path to crypto materials.
     const cryptoPath = path.resolve(
         __dirname,
-        'crypto_test'
+        'crypto'
     );
 
     const keyDirectoryPath = path.resolve(
         cryptoPath,
-        "User1@org1.example.com",
+        'users',
+        'User1@org1.example.com',
+        'msp',
         'keystore'
     );
 
     const certDirectoryPath = path.resolve(
         cryptoPath,
-        "User1@org1.example.com",
+        'users',
+        'User1@org1.example.com',
+        'msp',
         'signcerts'
     );
 
     const tlsCertPath = path.resolve(
         cryptoPath,
+        'peers',
         'peer0.org1.example.com',
+        'tls',
         'ca.crt'
     );
 
-    
-
     // Gateway peer endpoint.
-    const peerEndpoint = (':7051');
+    const peerEndpoint = ('10.203.71.1:7051');
 
     // Gateway peer SSL host name override.
     const peerHostAlias = ('peer0.org1.example.com');
