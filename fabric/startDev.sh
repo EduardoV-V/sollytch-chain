@@ -89,9 +89,3 @@ fi
 
 docker network create cc-tools-demo-net
 ./network.sh up createChannel -n $ORG_QNTY $CCAAS_TLS_ENABLED
-
-if [ "$DEPLOY_CCAAS" = "false" ]; then
-  ./network.sh deployCC -ccn cc-tools-demo -ccp ../chaincode -ccl go -n $ORG_QNTY -cccg $CCCG_PATH
-else
-  ./network.sh deployCCAAS -ccn cc-tools-demo -ccp ../chaincode -n $ORG_QNTY -cccg $CCCG_PATH $CCAAS_TLS_ENABLED
-fi

@@ -8,14 +8,15 @@ const grpc = require('@grpc/grpc-js');
 const readline = require('readline');
 const { connect, hash, signers } = require('@hyperledger/fabric-gateway');
 const crypto = require('node:crypto');
-const fsRead = require('fs') 
-const fs = require('node:fs/promises');
+const fs = require('fs') 
 const path = require('node:path');
 const { TextDecoder } = require('node:util');
 
 const channelName = ('mainchannel');
-const chaincodeName = ('sollytch-chain');
+const chaincodeName = ('sollytch-image');
 const mspId = ('org1MSP');
+
+let network, contract, client, gateway
 
 // Path to crypto materials.
 const cryptoPath = path.resolve(
@@ -50,6 +51,12 @@ const tlsCertPath = path.resolve(
     'tls',
     'ca.crt'
 );
+
+function hashImage(path) {
+  const fileBuffer = fs.readFileSync(path);
+  const hash = crypto.createHash("sha512").update(fileBuffer).digest("hex");
+  return hash;
+}
 
 // Gateway peer endpoint.
 const peerEndpoint = ('localhost:7051');
@@ -150,7 +157,7 @@ main().catch((error) => {
 });
 
 async function newGrpcConnection() {
-    const tlsRootCert = await fs.readFile(tlsCertPath);
+    const tlsRootCert = await fs.readFileSync(tlsCertPath);
     const tlsCredentials = grpc.credentials.createSsl(tlsRootCert);
     return new grpc.Client(peerEndpoint, tlsCredentials, {
         'grpc.ssl_target_name_override': peerHostAlias,
@@ -159,12 +166,12 @@ async function newGrpcConnection() {
 
 async function newIdentity() {
     const certPath = await getFirstDirFileName(certDirectoryPath);
-    const credentials = await fs.readFile(certPath);
+    const credentials = await fs.readFileSync(certPath);
     return { mspId, credentials };
 }
 
 async function getFirstDirFileName(dirPath) {
-    const files = await fs.readdir(dirPath);
+    const files = await fs.readdirSync(dirPath);
     const file = files[0];
     if (!file) {
         throw new Error(`No files in directory: ${dirPath}`);
@@ -174,14 +181,14 @@ async function getFirstDirFileName(dirPath) {
 
 async function newSigner() {
     const keyPath = await getFirstDirFileName(keyDirectoryPath);
-    const privateKeyPem = await fs.readFile(keyPath);
+    const privateKeyPem = await fs.readFileSync(keyPath);
     const privateKey = crypto.createPrivateKey(privateKeyPem);
     return signers.newPrivateKeySigner(privateKey);
 }
 
-async function invoke(contract) {
+async function invoke() {
     const jsonFilePath = require('path').join(__dirname, 'test.json');
-    const testData = JSON.parse(fsRead.readFileSync(jsonFilePath, 'utf8'));
+    const testData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
     const testID = testData.test_id;
     console.log(testID)
     
@@ -199,7 +206,39 @@ async function invoke(contract) {
     }
 }
 
-async function query(contract, testID) {
+async function store(imagePath, imageID) {
+    const imageHash = hashImage(imagePath)
+    await contract.submitTransaction(
+        "StoreImage",
+        imageID,
+        imageHash
+    );
+
+    console.log("Imagem armazenada com sucesso!");
+}
+
+async function getImage(imageID) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetImage", imageID);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+        
+        console.log("JSON recebido:", jsonString.substring(0, 100) + "...");
+        
+        // Parse
+        const result = JSON.parse(jsonString);
+        return result.HashData;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
+async function query(testID) {
     try {
         console.log(`consultando teste com ID: ${testID}`);
         
@@ -220,33 +259,6 @@ async function query(contract, testID) {
     } catch (error) {
         console.error("erro ao consultar teste", error);
     }
-}
-
-// Adicione esta função para debug no seu código
-async function debugIdentity() {
-    const identity = await newIdentity();
-    console.log('MSP ID:', identity.mspId);
-    console.log('Certificado:', identity.credentials.toString());
-    
-    const certPath = await getFirstDirFileName(certDirectoryPath);
-    console.log('Caminho do certificado:', certPath);
-    
-    const keyPath = await getFirstDirFileName(keyDirectoryPath);
-    console.log('Caminho da chave privada:', keyPath);
-    
-    // Verifique se os arquivos existem
-    try {
-        const certStats = await fs.stat(certPath);
-        const keyStats = await fs.stat(keyPath);
-        console.log('Certificado existe:', certStats.isFile());
-        console.log('Chave existe:', keyStats.isFile());
-    } catch (error) {
-        console.error('Erro ao verificar arquivos:', error);
-    }
-}
-
-function envOrDefault(key, defaultValue) {
-    return process.env[key] || defaultValue;
 }
 
 function askQuestion(query) {
@@ -274,12 +286,11 @@ function displayInputParameters() {
 
 async function main() {
     displayInputParameters();
-    debugIdentity();
 
     // The gRPC client connection should be shared by all Gateway connections to this endpoint.
-    const client = await newGrpcConnection();
+    client = await newGrpcConnection();
     
-    const gateway = connect({
+    gateway = connect({
         client,
         identity: await newIdentity(),
         signer: await newSigner(),
@@ -300,16 +311,24 @@ async function main() {
     });
 
      try {
-        const network = gateway.getNetwork(channelName);
-        const contract = network.getContract(chaincodeName);
+        network = gateway.getNetwork(channelName);
+        contract = network.getContract(chaincodeName);
 
         const action = (await askQuestion('input: ')).trim().toLowerCase();
 
         if (action === 'invoke') {
-            await invoke(contract);
+            await invoke();
         } else if (action === 'query') {
             const testID = (await askQuestion('testID: ')).trim();
-            await query(contract, testID);
+            await query(testID);
+        } else if (action === 'store') {
+            const imageID = (await askQuestion('imageID: ')).trim();
+            const imagePath = "./img.jpg" 
+            await store(imagePath, imageID)
+        } else if (action === "get") {
+            const imageID = (await askQuestion('imageID: ')).trim();
+            const hashResponse = await getImage(imageID);
+            console.log(hashResponse)
         } else {
             console.log('invalido');
         }
