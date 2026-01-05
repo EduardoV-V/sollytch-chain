@@ -19,18 +19,15 @@ func main() {
     modelFile := os.Args[1]
     dataFile := os.Args[2]
     
-    fmt.Println("🔧 Carregando modelo treinado...")
     model := trees.NewID3DecisionTree(0.1)
     if err := model.Load(modelFile); err != nil {
-        log.Fatalf("❌ Erro ao carregar modelo: %v", err)
+        log.Fatalf("Erro ao carregar modelo: %v", err)
     }
-    fmt.Println("✅ Modelo carregado com sucesso")
     
     // LER O CSV COMO STRING PRIMEIRO
-    fmt.Println("\n📂 Lendo dados para previsão...")
     csvBytes, err := os.ReadFile(dataFile)
     if err != nil {
-        log.Fatalf("❌ Erro ao ler arquivo CSV: %v", err)
+        log.Fatalf("Erro ao ler arquivo CSV: %v", err)
     }
     
     csvContent := string(csvBytes)
@@ -38,27 +35,12 @@ func main() {
     // Verificar se a última coluna está vazia
     lines := strings.Split(strings.TrimSpace(csvContent), "\n")
     if len(lines) == 0 {
-        log.Fatal("❌ Arquivo CSV vazio")
+        log.Fatal("Arquivo CSV vazio")
     }
     
     // Verificar cabeçalho
     headers := strings.Split(lines[0], ",")
-    fmt.Printf("📋 Cabeçalho detectado: %d colunas\n", len(headers))
-    fmt.Printf("   Última coluna: '%s'\n", headers[len(headers)-1])
     
-    // Verificar primeira linha de dados
-    if len(lines) > 1 {
-        firstData := strings.Split(lines[1], ",")
-        fmt.Printf("\n📊 Primeira linha de dados: %d valores\n", len(firstData))
-        fmt.Printf("   Último valor: '%s'\n", firstData[len(firstData)-1])
-    }
-    
-    // Se a última coluna estiver vazia, precisamos adicionar um placeholder
-    // O golearn espera que a coluna de classe exista, mesmo que vazia
-    fmt.Println("\n🎯 Preparando dados para previsão...")
-    
-    // Usar ParseCSVToInstances normalmente - se a coluna estiver vazia, vai dar problema
-    // Vamos adicionar um placeholder
     reader := strings.NewReader(csvContent)
     data, err := base.ParseCSVToInstancesFromReader(reader, true)
     if err != nil {

@@ -48,7 +48,7 @@
     );
 
     // Gateway peer endpoint.
-    const peerEndpoint = ('10.203.71.1:7051');
+    const peerEndpoint = ('localhost:7051');
 
     // Gateway peer SSL host name override.
     const peerHostAlias = ('peer0.org1.example.com');
