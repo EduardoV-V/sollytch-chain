@@ -190,6 +190,44 @@ async function invoke(contract) {
     }
 }
 
+function hashImage(path) {
+  const fileBuffer = fsRead.readFileSync(path);
+  const hash = crypto.createHash("sha512").update(fileBuffer).digest("hex");
+  return hash;
+}
+
+async function getImage(contract,imageID) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetImage", imageID);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+        
+        console.log("JSON recebido:", jsonString.substring(0, 100) + "...");
+        
+        // Parse
+        const result = JSON.parse(jsonString);
+        return result.HashData;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
+async function storeImage(contract,imagePath, imageID) {
+    const imageHash = hashImage(imagePath)
+    await contract.submitTransaction(
+        "StoreImage",
+        imageID,
+        imageHash
+    );
+
+    console.log("Imagem armazenada com sucesso!");
+}
+
 async function editTest(contract) {
     const testID = (await askQuestion('testID do teste: ')).trim();
 
@@ -241,8 +279,8 @@ async function editTest(contract) {
 async function query(contract, testID) {
     try {
         console.log(`consultando teste com ID: ${testID}`);
-
         const resultBytes = await contract.evaluateTransaction('QueryTest', testID);
+        console.log(resultBytes)
         let resultString = resultBytes.toString('utf8');
 
         if (/^\d+(,\d+)*$/.test(resultString.trim())) {
@@ -316,24 +354,34 @@ async function main() {
 
     try {
         const network = gateway.getNetwork(channelName);
-        const contract = network.getContract(chaincodeName);
+        const sollytchImageContract = network.getContract("sollytch-image");
+        const sollytchChainContract = network.getContract("sollytch-chain");
 
         const action = (await askQuestion(
-            'acao (invoke | query | storemodel | edit): '
+            'acao (store_test | query_test | edit_test | storemodel | store_image | query_image): '
         )).trim().toLowerCase();
 
-        if (action === 'invoke') {
-            await invoke(contract);
+        if (action === 'store_test') {
+            await invoke(sollytchChainContract);
 
-        } else if (action === 'query') {
+        } else if (action === 'query_test') {
             const testID = (await askQuestion('testID: ')).trim();
-            await query(contract, testID);
+            await query(sollytchChainContract, testID);
 
         } else if (action === 'storemodel') {
-            await storeModel(contract);
+            await storeModel(sollytchChainContract);
 
-        } else if (action === 'edit') {
-            await editTest(contract);
+        } else if (action === 'edit_test') {
+            await editTest(sollytchChainContract);
+
+        } else if (action === 'store_image') {
+            const imageID = (await askQuestion('imageID: ')).trim();
+            const imagePath = "./imagem.jpg" 
+            await storeImage(sollytchImageContract,imagePath,imageID);
+
+        } else if (action === 'query_image') {
+            const imageID = (await askQuestion('imageID: ')).trim();
+            await getImage(sollytchImageContract,imageID);
 
         } else {
             console.log('acao invalida');
