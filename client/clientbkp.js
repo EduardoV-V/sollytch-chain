@@ -54,6 +54,21 @@ const controleInternoEncoder = {
     'invalid': 0
 };
 
+function setNestedField(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+
+    for (let i = 0; i < keys.length - 1; i++) {
+        if (!(keys[i] in current)) {
+            throw new Error(`campo inexistente: ${keys.slice(0, i + 1).join('.')}`);
+        }
+        current = current[keys[i]];
+    }
+
+    current[keys[keys.length - 1]] = value;
+}
+
+
 function preprocessForPrediction(testData) {
     console.log("Processando dados para predição...");
     
@@ -175,6 +190,54 @@ async function invoke(contract) {
     }
 }
 
+async function editTest(contract) {
+    const testID = (await askQuestion('testID do teste: ')).trim();
+
+    const testData = await query(contract, testID);
+    if (!testData) return;
+
+    console.log('\nJSON atual:\n');
+    console.log(JSON.stringify(testData, null, 2));
+
+    const fieldPath = (await askQuestion(
+        '\nCampo a editar (ex: sample_pH ou predictions.qc_status): '
+    )).trim();
+
+    const rawValue = (await askQuestion(
+        'Novo valor: '
+    )).trim();
+
+    let newValue;
+    if (rawValue === 'true') newValue = true;
+    else if (rawValue === 'false') newValue = false;
+    else if (!isNaN(rawValue)) newValue = Number(rawValue);
+    else newValue = rawValue;
+
+    try {
+        setNestedField(testData, fieldPath, newValue);
+    } catch (err) {
+        console.error('erro ao editar campo:', err.message);
+        return;
+    }
+
+    console.log('\nJSON atualizado:\n');
+    console.log(JSON.stringify(testData, null, 2));
+
+    const confirm = (await askQuestion('\nConfirmar update? (y/n): ')).trim().toLowerCase();
+    if (confirm !== 'y') {
+        console.log('operacao cancelada');
+        return;
+    }
+
+    await contract.submitTransaction(
+        'UpdateTest',
+        testID,
+        JSON.stringify(testData)
+    );
+
+    console.log('teste atualizado com sucesso');
+}
+
 async function query(contract, testID) {
     try {
         console.log(`consultando teste com ID: ${testID}`);
@@ -256,7 +319,7 @@ async function main() {
         const contract = network.getContract(chaincodeName);
 
         const action = (await askQuestion(
-            'acao (invoke | query | storemodel): '
+            'acao (invoke | query | storemodel | edit): '
         )).trim().toLowerCase();
 
         if (action === 'invoke') {
@@ -268,6 +331,9 @@ async function main() {
 
         } else if (action === 'storemodel') {
             await storeModel(contract);
+
+        } else if (action === 'edit') {
+            await editTest(contract);
 
         } else {
             console.log('acao invalida');
