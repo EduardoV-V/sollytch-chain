@@ -1,19 +1,19 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"embed"
 	"os"
 	"path/filepath"
+	"strings"
+	"strconv"
 
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	"github.com/sjwhitworth/golearn/base"
 	"github.com/sjwhitworth/golearn/trees"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// NullFloat64 trata valores float64 que podem ser nulos no JSON
 type NullFloat64 float64
 
 func (nf *NullFloat64) UnmarshalJSON(b []byte) error {
@@ -29,278 +29,292 @@ func (nf *NullFloat64) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// TestRecord representa a estrutura completa de dados de um teste no blockchain
-type TestRecord struct {
-	TestID                  string     `json:"test_id"`
-	Timestamp               string     `json:"timestamp"`
-	Lat                     float64    `json:"lat"`
-	Lon                     float64    `json:"lon"`
-	GeoHash                 string     `json:"geo_hash"`
-	OperatorID              string     `json:"operator_id"`
-	OperatorDID             string     `json:"operator_did"`
-	MatrixType              string     `json:"matrix_type"`
-	CassetteLot             string     `json:"cassette_lot"`
-	ReagentLot              string     `json:"reagent_lot"`
-	ExpiryDaysLeft          int        `json:"expiry_days_left"`
-	DistanceMM              float64    `json:"distance_mm"`
-	TimeToMigrateS          float64    `json:"time_to_migrate_s"`
-	ControlLineOK           bool       `json:"control_line_ok"`
-	SampleVolumeUL          float64    `json:"sample_volume_uL"`
-	SamplePH                float64    `json:"sample_pH"`
-	SampleTurbidityNTU      float64    `json:"sample_turbidity_NTU"`
-	SampleTempC             float64    `json:"sample_temp_C"`
-	AmbientTC               float64    `json:"ambient_T_C"`
-	AmbientRHPct            float64    `json:"ambient_RH_pct"`
-	LightingLux             float64    `json:"lighting_lux"`
-	TiltDeg                 float64    `json:"tilt_deg"`
-	PreincubationTimeS      float64    `json:"preincubation_time_s"`
-	TimeSinceSamplingMin    float64    `json:"time_since_sampling_min"`
-	StorageCondition        string     `json:"storage_condition"`
-	PrefilterUsed           bool       `json:"prefilter_used"`
-	ImageTaken              bool       `json:"image_taken"`
-	ImageBlurScore          NullFloat64 `json:"image_blur_score"`
-	DeviceFWVersion         string     `json:"device_fw_version"`
-	ProdutoID               string     `json:"produto_id"`
-	KitCalibrationID        string     `json:"kit_calibration_id"`
-	ControleInternoResult   string     `json:"controle_interno_result"`
-	CadeiaFrioStatus        bool       `json:"cadeia_frio_status"`
-	TempoTransporteHoras    float64    `json:"tempo_transporte_horas"`
-	CondicaoTransporte      string     `json:"condicao_transporte"`
-	EstimatedConcentrationPpb float64  `json:"estimated_concentration_ppb"`
-	IncertezaEstimativaPpb  float64    `json:"incerteza_estimativa_ppb"`
-	AcaoRecomendada         string     `json:"acao_recomendada"`
-	ResultClass             string     `json:"result_class"`
-	QCStatus                string     `json:"qc_status"`
+type ModelBytes struct {
+	ModelKey  string `json:"modelKey"`
+	ModelData string `json:"modelData"` // <-- armazena em b64!!!
 }
 
-//go:embed modelos/*
-var modelosFS embed.FS
+type TestRecord struct {
+	TestID                      string       `json:"test_id"`
+	Timestamp                   string       `json:"timestamp"`
+	Lat                         float64      `json:"lat"`
+	Lon                         float64      `json:"lon"`
+	GeoHash                     string       `json:"geo_hash"`
+	OperatorID                  string       `json:"operator_id"`
+	OperatorDID                 string       `json:"operator_did"`
+	MatrixType                  string       `json:"matrix_type"`
+	CassetteLot                 string       `json:"cassette_lot"`
+	ReagentLot                  string       `json:"reagent_lot"`
+	ExpiryDaysLeft              int          `json:"expiry_days_left"`
+	DistanceMM                  float64      `json:"distance_mm"`
+	TimeToMigrateS              float64      `json:"time_to_migrate_s"`
+	ControlLineOK               bool         `json:"control_line_ok"`
+	SampleVolumeUL              float64      `json:"sample_volume_uL"`
+	SamplePH                    float64      `json:"sample_pH"`
+	SampleTurbidityNTU          float64      `json:"sample_turbidity_NTU"`
+	SampleTempC                 float64      `json:"sample_temp_C"`
+	AmbientTC                   float64      `json:"ambient_T_C"`
+	AmbientRHPct                float64      `json:"ambient_RH_pct"`
+	LightingLux                 float64      `json:"lighting_lux"`
+	TiltDeg                     float64      `json:"tilt_deg"`
+	PreincubationTimeS          float64      `json:"preincubation_time_s"`
+	TimeSinceSamplingMin        float64      `json:"time_since_sampling_min"`
+	StorageCondition            string       `json:"storage_condition"`
+	PrefilterUsed               bool         `json:"prefilter_used"`
+	ImageTaken                  bool         `json:"image_taken"`
+	ImageBlurScore              NullFloat64  `json:"image_blur_score"`
+	DeviceFWVersion             string       `json:"device_fw_version"`
+	ProdutoID                   string       `json:"produto_id"`
+	KitCalibrationID            string       `json:"kit_calibration_id"`
+	ControleInternoResult       string       `json:"controle_interno_result"`
+	CadeiaFrioStatus            bool         `json:"cadeia_frio_status"`
+	TempoTransporteHoras        float64      `json:"tempo_transporte_horas"`
+	CondicaoTransporte          string       `json:"condicao_transporte"`
+	EstimatedConcentrationPpb   float64      `json:"estimated_concentration_ppb"`
+	IncertezaEstimativaPpb      float64      `json:"incerteza_estimativa_ppb"`
+	AcaoRecomendada             string       `json:"acao_recomendada"`
+	ResultClass                 string       `json:"result_class"`
+	QCStatus                    string       `json:"qc_status"`
+}
 
-// SmartContract define a estrutura do chaincode com os métodos disponíveis
 type SmartContract struct {
 	contractapi.Contract
 }
 
-var (
-    modeloAcao   *trees.ID3DecisionTree
-    modeloResult *trees.ID3DecisionTree
-    modeloQc     *trees.ID3DecisionTree
-)
+func (s *SmartContract) StoreModel(ctx contractapi.TransactionContextInterface, modelKey string, modelBase64 string) error {
+	if modelKey == "" || modelBase64 == "" {
+		return fmt.Errorf("modelKey e modelData nao podem ser vazios")
+	}
 
-func writeTempModelFile(name string, data []byte) (string, error) {
-    dir := os.TempDir()
-    path := filepath.Join(dir, name)
+	switch modelKey {
+	case "acao_recomendada", "result_class", "qc_status":
+	default:
+		return fmt.Errorf("modelKey invalido")
+	}
 
-    err := os.WriteFile(path, data, 0600)
-    if err != nil {
-        return "", err
-    }
+	model := ModelBytes{
+		ModelKey:  modelKey,
+		ModelData: modelBase64,
+	}
 
-    return path, nil
+	bytes, err := json.Marshal(model)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState(modelKey, bytes)
+}
+
+
+func (s *SmartContract) getModelBytes(ctx contractapi.TransactionContextInterface, modelKey string) ([]byte, error) {
+	data, err := ctx.GetStub().GetState(modelKey)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, fmt.Errorf("modelo %s nao encontrado", modelKey)
+	}
+
+	var stored ModelBytes
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return nil, err
+	}
+
+	return base64.StdEncoding.DecodeString(stored.ModelData)
+}
+
+func loadID3ModelFromLedger(ctx contractapi.TransactionContextInterface, s *SmartContract, modelKey string) (*trees.ID3DecisionTree, error) {
+	bytes, err := s.getModelBytes(ctx, modelKey)
+	if err != nil {
+		return nil, err
+	}
+
+	path := filepath.Join(os.TempDir(), modelKey)
+	if err := os.WriteFile(path, bytes, 0600); err != nil {
+		return nil, err
+	}
+
+	model := trees.NewID3DecisionTree(0.1)
+	if err := model.Load(path); err != nil {
+		return nil, err
+	}
+
+	return model, nil
 }
 
 func loadDataset(csvData string) (*base.DenseInstances, error) {
-    reader := strings.NewReader(csvData)
-    
-    data, err := base.ParseCSVToInstancesFromReader(reader, true)
-    if err != nil {
-        return nil, fmt.Errorf("erro ao carregar dataset: %v", err)
-    }
-    
-    return data, nil
-}
+	reader := strings.NewReader(csvData)
 
-func carregarModelos() error {
-    // -------- ACAO RECOMENDADA --------
-    acaoBytes, err := modelosFS.ReadFile("modelos/acao_recomendada")
-    if err != nil {
-        return err
-    }
-
-    acaoPath, err := writeTempModelFile("acao_recomendada.model", acaoBytes)
-    if err != nil {
-        return err
-    }
-
-    modeloAcao = trees.NewID3DecisionTree(0.1)
-    if err := modeloAcao.Load(acaoPath); err != nil {
-        return err
-    }
-
-    // -------- RESULT CLASS --------
-    resultBytes, err := modelosFS.ReadFile("modelos/result_class")
-    if err != nil {
-        return err
-    }
-
-    resultPath, err := writeTempModelFile("result_class.model", resultBytes)
-    if err != nil {
-        return err
-    }
-
-    modeloResult = trees.NewID3DecisionTree(0.1)
-    if err := modeloResult.Load(resultPath); err != nil {
-        return err
-    }
-
-    // -------- QC STATUS --------
-    qcBytes, err := modelosFS.ReadFile("modelos/qc_status")
-    if err != nil {
-        return err
-    }
-
-    qcPath, err := writeTempModelFile("qc_status.model", qcBytes)
-    if err != nil {
-        return err
-    }
-
-    modeloQc = trees.NewID3DecisionTree(0.1)
-    if err := modeloQc.Load(qcPath); err != nil {
-        return err
-    }
-
-    return nil
-}
-
-func buildHeader(target string) string {
-    baseHeader := "lat,lon,expiry_days_left,distance_mm,time_to_migrate_s," +
-        "sample_volume_uL,sample_pH,sample_turbidity_NTU,sample_temp_C,ambient_T_C," +
-        "ambient_RH_pct,lighting_lux,tilt_deg,preincubation_time_s,time_since_sampling_min," +
-        "image_blur_score,tempo_transporte_horas,estimated_concentration_ppb," +
-        "incerteza_estimativa_ppb,control_line_ok,controle_interno_result"
-
-    return baseHeader + "," + target
-}
-
-// StoreTest armazena um registro de teste no ledger do blockchain
-func (s *SmartContract) StoreTest(ctx contractapi.TransactionContextInterface, testID string, jsonStr string, predictStr string) error {
-	if modeloAcao == nil || modeloResult == nil || modeloQc == nil {
-		if err := carregarModelos(); err != nil {
-			return err
-		}
+	data, err := base.ParseCSVToInstancesFromReader(reader, true)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao carregar dataset: %v", err)
 	}
 
-    var record TestRecord
+	return data, nil
+}
 
-    err := json.Unmarshal([]byte(jsonStr), &record)
-    if err != nil {
+var baseHeader =
+	"lat,lon,expiry_days_left,distance_mm,time_to_migrate_s," +
+		"sample_volume_uL,sample_pH,sample_turbidity_NTU,sample_temp_C," +
+		"ambient_T_C,ambient_RH_pct,lighting_lux,tilt_deg," +
+		"preincubation_time_s,time_since_sampling_min,image_blur_score," +
+		"tempo_transporte_horas,estimated_concentration_ppb," +
+		"incerteza_estimativa_ppb,control_line_ok,controle_interno_result"
+
+
+func predictFromCSV(model *trees.ID3DecisionTree, target string, csvRow string) (string, error) {
+	header := baseHeader + "," + target
+	csv := header + "\n" + csvRow + ",?"
+
+	data, err := loadDataset(csv)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := model.Predict(data)
+	if err != nil {
+		return "", err
+	}
+
+	return res.RowString(0), nil
+}
+
+func parseCSVToTestRecord(csvRow string) (*TestRecord, error) {
+	fields := strings.Split(csvRow, ",")
+
+	if len(fields) != 21 {
+		return nil, fmt.Errorf("csv invalido: esperado 21 campos, recebeu %d", len(fields))
+	}
+
+	toBool := func(v string) bool {
+		return v == "1" || strings.ToLower(v) == "true"
+	}
+
+	toFloat := func(v string) float64 {
+		f, _ := strconv.ParseFloat(v, 64)
+		return f
+	}
+
+	toInt := func(v string) int {
+		i, _ := strconv.Atoi(v)
+		return i
+	}
+
+	return &TestRecord{
+		Lat:                       toFloat(fields[0]),
+		Lon:                       toFloat(fields[1]),
+		ExpiryDaysLeft:            toInt(fields[2]),
+		DistanceMM:                toFloat(fields[3]),
+		TimeToMigrateS:            toFloat(fields[4]),
+		SampleVolumeUL:            toFloat(fields[5]),
+		SamplePH:                  toFloat(fields[6]),
+		SampleTurbidityNTU:        toFloat(fields[7]),
+		SampleTempC:               toFloat(fields[8]),
+		AmbientTC:                 toFloat(fields[9]),
+		AmbientRHPct:              toFloat(fields[10]),
+		LightingLux:               toFloat(fields[11]),
+		TiltDeg:                   toFloat(fields[12]),
+		PreincubationTimeS:        toFloat(fields[13]),
+		TimeSinceSamplingMin:      toFloat(fields[14]),
+		ImageBlurScore:            NullFloat64(toFloat(fields[15])),
+		TempoTransporteHoras:      toFloat(fields[16]),
+		EstimatedConcentrationPpb: toFloat(fields[17]),
+		IncertezaEstimativaPpb:    toFloat(fields[18]),
+		ControlLineOK:             toBool(fields[19]),
+		ControleInternoResult:     fields[20],
+	}, nil
+}
+
+func (s *SmartContract) StoreTest(
+    ctx contractapi.TransactionContextInterface,
+    testID string,
+    jsonStr string,
+    predictStr string,
+) error {
+
+    // 1️⃣ JSON completo → struct
+    var record TestRecord
+    if err := json.Unmarshal([]byte(jsonStr), &record); err != nil {
         return fmt.Errorf("erro ao decodificar JSON: %v", err)
     }
 
-    if record.TestID == "" {
-        record.TestID = testID
-    } else if record.TestID != testID {
-        return fmt.Errorf("o test_id do JSON (%s) não corresponde ao argumento (%s)", record.TestID, testID)
-    }
-	
-	if modeloAcao == nil || modeloResult == nil || modeloQc == nil {
-		fmt.Println("Modelos não encontrados")
-	}
+    record.TestID = testID
 
-	headerAcao := buildHeader("acao_recomendada")
-    fullCSV := headerAcao + "\n" + predictStr + ",?"
-    predictionDataAcao, err := loadDataset(fullCSV)
-	
-	acao, err := modeloAcao.Predict(predictionDataAcao)
+    // 2️⃣ Carrega modelos DO LEDGER
+    modeloAcao, err := loadID3ModelFromLedger(ctx, s, "acao_recomendada")
     if err != nil {
-        return fmt.Errorf("erro ao fazer previsões: %v", err)
+        return err
     }
 
-	acaoPred := acao.RowString(0)
-	record.AcaoRecomendada = acaoPred
-
-	headerResult := buildHeader("result_class")
-	fullCSV = headerResult + "\n" + predictStr + ",?"
-
-    predictionDataResult, err := loadDataset(fullCSV)
-	
-	result, err := modeloResult.Predict(predictionDataResult)
+    modeloResult, err := loadID3ModelFromLedger(ctx, s, "result_class")
     if err != nil {
-        return fmt.Errorf("erro ao fazer previsões: %v", err)
+        return err
     }
 
-	resultPred := result.RowString(0)
-	record.ResultClass = resultPred
-
-	header := buildHeader("qc_status")
-	fullCSV = header + "\n" + predictStr + ",?"
-
-    predictionDataStatus, err := loadDataset(fullCSV)
-
-	qcStatus, err := modeloQc.Predict(predictionDataStatus)
+    modeloQc, err := loadID3ModelFromLedger(ctx, s, "qc_status")
     if err != nil {
-        return fmt.Errorf("erro ao fazer previsões: %v", err)
+        return err
     }
 
-	qcStatusPred := qcStatus.RowString(0)
-	record.QCStatus = qcStatusPred
-
-    recordBytes, err := json.Marshal(record)
+    // 3️⃣ Predições (usando CSV compatível com treino)
+    record.AcaoRecomendada, err =
+        predictFromCSV(modeloAcao, "acao_recomendada", predictStr)
     if err != nil {
-        return fmt.Errorf("erro ao serializar registro: %v", err)
+        return err
     }
 
-    return ctx.GetStub().PutState(testID, recordBytes)
+    record.ResultClass, err =
+        predictFromCSV(modeloResult, "result_class", predictStr)
+    if err != nil {
+        return err
+    }
+
+    record.QCStatus, err =
+        predictFromCSV(modeloQc, "qc_status", predictStr)
+    if err != nil {
+        return err
+    }
+
+    // 4️⃣ Salva no ledger
+    bytes, err := json.Marshal(record)
+    if err != nil {
+        return err
+    }
+
+    return ctx.GetStub().PutState(testID, bytes)
 }
 
-// QueryTest recupera um registro de teste específico pelo ID
-func (s *SmartContract) QueryTest(ctx contractapi.TransactionContextInterface, testID string) (*TestRecord, error) {
-	recordBytes, err := ctx.GetStub().GetState(testID)
+func (s *SmartContract) QueryTest(
+	ctx contractapi.TransactionContextInterface,
+	testID string,
+) (*TestRecord, error) {
+
+	data, err := ctx.GetStub().GetState(testID)
 	if err != nil {
-		return nil, fmt.Errorf("falha ao ler do ledger: %v", err)
+		return nil, err
 	}
-	if recordBytes == nil {
-		return nil, fmt.Errorf("teste %s não encontrado", testID)
+	if data == nil {
+		return nil, fmt.Errorf("teste nao encontrado")
 	}
 
 	var record TestRecord
-	err = json.Unmarshal(recordBytes, &record)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao decodificar registro: %v", err)
+	if err := json.Unmarshal(data, &record); err != nil {
+		return nil, err
 	}
 
 	return &record, nil
 }
 
-// GetAllTests retorna todos os registros de teste armazenados no ledger
-func (s *SmartContract) GetAllTests(ctx contractapi.TransactionContextInterface) ([]TestRecord, error) {
-	// Obtém um iterador para todos os registros no ledger
-	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
-	if err != nil {
-		return nil, err
-	}
-	defer resultsIterator.Close()
-
-	var records []TestRecord
-	// Itera sobre todos os registros encontrados
-	for resultsIterator.HasNext() {
-		queryResponse, err := resultsIterator.Next()
+	// main inicia a execução do chaincode no blockchain
+	func main() {
+		// Cria uma nova instância do chaincode
+		chaincode, err := contractapi.NewChaincode(new(SmartContract))
 		if err != nil {
-			return nil, err
+			panic(fmt.Sprintf("erro criando chaincode: %v", err))
 		}
 
-		// Converte cada registro para a estrutura TestRecord
-		var record TestRecord
-		err = json.Unmarshal(queryResponse.Value, &record)
-		if err != nil {
-			return nil, err
+		// Inicia o chaincode e aguarda por transações
+		if err := chaincode.Start(); err != nil {
+			panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
 		}
-		records = append(records, record)
 	}
-
-	return records, nil
-}
-
-// main inicia a execução do chaincode no blockchain
-func main() {
-	// Cria uma nova instância do chaincode
-	chaincode, err := contractapi.NewChaincode(new(SmartContract))
-	if err != nil {
-		panic(fmt.Sprintf("erro criando chaincode: %v", err))
-	}
-
-	// Inicia o chaincode e aguarda por transações
-	if err := chaincode.Start(); err != nil {
-		panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
-	}
-}
