@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"strconv"
+	"time"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	"github.com/sjwhitworth/golearn/base"
@@ -30,11 +31,17 @@ func (nf *NullFloat64) UnmarshalJSON(b []byte) error {
 }
 
 type ModelBytes struct {
+	Version   int    `json:"version"`
+	UpdatedAt string `json:"updated_at"`
 	ModelKey  string `json:"modelKey"`
 	ModelData string `json:"modelData"` // <-- armazena em b64!!!
 }
 
 type TestRecord struct {
+	Version 					int          `json:"version"`
+	LastUpdatedAt               string       `json:"last_updated_at"`
+	CreatedAt                   string       `json:"created_at"`
+
 	TestID                      string       `json:"test_id"`
 	Timestamp                   string       `json:"timestamp"`
 	Lat                         float64      `json:"lat"`
@@ -81,6 +88,13 @@ type SmartContract struct {
 	contractapi.Contract
 }
 
+func incrementVersion(existing *TestRecord) int {
+    if existing == nil {
+        return 1
+    }
+    return existing.Version + 1
+}
+
 func (s *SmartContract) StoreModel(ctx contractapi.TransactionContextInterface, modelKey string, modelBase64 string) error {
 	if modelKey == "" || modelBase64 == "" {
 		return fmt.Errorf("modelKey e modelData nao podem ser vazios")
@@ -88,23 +102,49 @@ func (s *SmartContract) StoreModel(ctx contractapi.TransactionContextInterface, 
 
 	switch modelKey {
 	case "acao_recomendada", "result_class", "qc_status":
+		// ok
 	default:
 		return fmt.Errorf("modelKey invalido")
 	}
+	stub := ctx.GetStub()
 
-	model := ModelBytes{
-		ModelKey:  modelKey,
-		ModelData: modelBase64,
+	existingBytes, err := stub.GetState(modelKey)
+	if err != nil {
+		return fmt.Errorf("erro ao buscar modelo existente: %v", err)
 	}
+	version := 1
+
+	if existingBytes != nil {
+		var existingModel ModelBytes
+		err = json.Unmarshal(existingBytes, &existingModel)
+		if err != nil {
+			return fmt.Errorf("erro ao decodificar modelo existente: %v", err)
+		}
+		version = existingModel.Version + 1
+	}
+
+	txTime, err := ctx.GetStub().GetTxTimestamp()
+    if err != nil {
+        return err
+    }
+    
+	model := ModelBytes{
+        ModelKey:  modelKey,
+        ModelData: modelBase64,
+        Version:   version,
+        UpdatedAt: time.Unix(
+            txTime.Seconds,
+            int64(txTime.Nanos),
+        ).UTC().Format(time.RFC3339),
+    }
 
 	bytes, err := json.Marshal(model)
 	if err != nil {
 		return err
 	}
 
-	return ctx.GetStub().PutState(modelKey, bytes)
+	return stub.PutState(modelKey, bytes)
 }
-
 
 func (s *SmartContract) getModelBytes(ctx contractapi.TransactionContextInterface, modelKey string) ([]byte, error) {
 	data, err := ctx.GetStub().GetState(modelKey)
@@ -225,22 +265,22 @@ func parseCSVToTestRecord(csvRow string) (*TestRecord, error) {
 	}, nil
 }
 
-func (s *SmartContract) StoreTest(
-    ctx contractapi.TransactionContextInterface,
-    testID string,
-    jsonStr string,
-    predictStr string,
-) error {
-
-    // 1️⃣ JSON completo → struct
-    var record TestRecord
+func (s *SmartContract) StoreTest(ctx contractapi.TransactionContextInterface, testID string, jsonStr string, predictStr string) error {
+    existing, err := ctx.GetStub().GetState(testID)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return fmt.Errorf("teste %s ja existe", testID)
+	}
+	
+	var record TestRecord
     if err := json.Unmarshal([]byte(jsonStr), &record); err != nil {
         return fmt.Errorf("erro ao decodificar JSON: %v", err)
     }
 
     record.TestID = testID
-
-    // 2️⃣ Carrega modelos DO LEDGER
+	
     modeloAcao, err := loadID3ModelFromLedger(ctx, s, "acao_recomendada")
     if err != nil {
         return err
@@ -256,7 +296,6 @@ func (s *SmartContract) StoreTest(
         return err
     }
 
-    // 3️⃣ Predições (usando CSV compatível com treino)
     record.AcaoRecomendada, err =
         predictFromCSV(modeloAcao, "acao_recomendada", predictStr)
     if err != nil {
@@ -275,8 +314,60 @@ func (s *SmartContract) StoreTest(
         return err
     }
 
-    // 4️⃣ Salva no ledger
+	txTime, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return err
+	}
+
+	timestamp := time.Unix(
+		txTime.Seconds,
+		int64(txTime.Nanos),
+	).UTC().Format(time.RFC3339)
+
+	record.Version = 0
+	record.CreatedAt = timestamp
+	record.LastUpdatedAt = timestamp
+
     bytes, err := json.Marshal(record)
+    if err != nil {
+        return err
+    }
+	
+    return ctx.GetStub().PutState(testID, bytes)
+}
+
+func (s *SmartContract) UpdateTest(ctx contractapi.TransactionContextInterface, testID string, fullJSON string,) error {
+    existingBytes, err := ctx.GetStub().GetState(testID)
+    if err != nil {
+        return err
+    }
+    if existingBytes == nil {
+        return fmt.Errorf("teste %s nao encontrado", testID)
+    }
+
+    var existing TestRecord
+    if err := json.Unmarshal(existingBytes, &existing); err != nil {
+        return err
+    }
+
+    var updated TestRecord
+    if err := json.Unmarshal([]byte(fullJSON), &updated); err != nil {
+        return fmt.Errorf("json invalido: %v", err)
+    }
+
+	txTime, err := ctx.GetStub().GetTxTimestamp()
+    if err != nil {
+        return err
+    }
+
+    updated.TestID = testID
+    updated.Version = existing.Version + 1
+    updated.LastUpdatedAt = time.Unix(
+        txTime.Seconds,
+        int64(txTime.Nanos),
+    ).UTC().Format(time.RFC3339)
+
+    bytes, err := json.Marshal(updated)
     if err != nil {
         return err
     }
@@ -284,11 +375,7 @@ func (s *SmartContract) StoreTest(
     return ctx.GetStub().PutState(testID, bytes)
 }
 
-func (s *SmartContract) QueryTest(
-	ctx contractapi.TransactionContextInterface,
-	testID string,
-) (*TestRecord, error) {
-
+func (s *SmartContract) QueryTest(ctx contractapi.TransactionContextInterface, testID string) (*TestRecord, error) {
 	data, err := ctx.GetStub().GetState(testID)
 	if err != nil {
 		return nil, err
@@ -305,16 +392,14 @@ func (s *SmartContract) QueryTest(
 	return &record, nil
 }
 
-	// main inicia a execução do chaincode no blockchain
-	func main() {
-		// Cria uma nova instância do chaincode
-		chaincode, err := contractapi.NewChaincode(new(SmartContract))
-		if err != nil {
-			panic(fmt.Sprintf("erro criando chaincode: %v", err))
-		}
 
-		// Inicia o chaincode e aguarda por transações
-		if err := chaincode.Start(); err != nil {
-			panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
-		}
+func main() {
+	chaincode, err := contractapi.NewChaincode(new(SmartContract))
+	if err != nil {
+		panic(fmt.Sprintf("erro criando chaincode: %v", err))
 	}
+
+	if err := chaincode.Start(); err != nil {
+		panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
+	}
+}

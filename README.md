@@ -22,25 +22,45 @@ Para levantar a rede, é *ESSENCIAL* usar o script `./startDev.sh` na pasta raiz
 
 Para derrubar, deve-se usar o script `./network.sh` com o parâmetro `down -noclr`. Isso vai manter os artefatos da rede ainda criados, o que evita processamento extra e mantém os certificados de usuários funcionais para levantamentos futuros.
 
-Por fim, para instalar o chaincode de armazenamento dos testes, basta rodar o comando abaixo:
+## Instalação dos Chaincodes
+
+A rede atualmente conta com dois chaincodes:
+
+| Chaincodes | Funcionalidade |
+|------------|-------------------|
+| Sollytch-chain | Armazena dados da planilha no ledger do chaincode, usando modelos de machine learning para predição da avaliação| 
+| Sollytch-image | Armazena o hash de uma imagem junto de uma chave para buscas futuras|
+
+Ambos os chaincodes possuem funções de ```query```, permitindo a busca usando uma chave (TEST-ID para sollytch-chain e imageID para sollytch-image). Além disso, o chaincode sollytch-chain também possui função para atualização manual dos modelos de machine learning e dos dados de testes que estão armazenados atualmente.
+
+Para fazer a instalação dos chaincodes, é necessário usar as seguintes funções:
 
 ```bash
 ./network.sh deployCCAAS -ccn sollytch-chain -ccp ../sollytch-chain/
+
+./network.sh deployCCAAS -ccn sollytch-image -ccp ../sollytch-image/
 ```
 
 Irei implementar um script para automatizar esse processo de instalação do chaincode, mas por enquanto esse comando funciona perfeitamente.
 
-## Execução do chaincode
+## Execução dos Chaincodes
 
-Na pasta raiz da rede, tem uma pasta "client". Essa pasta contém todos os itens para executar o chaincode usando um cliente `Node.js`. Para instalar as dependências, acesse a pasta client e execute `npm i`. Após a instalação, o chaincode pode ser executado usando o arquivo `clientbkp.js`, ou usando a interface de testes.
+Na pasta raiz da rede, tem uma pasta "client". Essa pasta contém todos os itens para executar o chaincode usando um cliente `Node.js`. Para instalar as dependências, acesse a pasta client e execute `npm i`. Atualmente, a interface de testes está incompatível com a estrutura do chaincode. Atualizações futuras reimplementarão a interface. 
 
-### Execução por Terminal
-
-O arquivo pode ser executado usando o comando `node clientbkp.js`. Isso resultará na espera de um input do usuário, onde as opções são "invoke" e "query". A opção invoke vai armazenar o teste no ledger da blockchain, teste esse que está no arquivo `test.json`. Esse arquivo é uma das linhas da planilha com os dados dos testes. Ainda não foi implementada nenhuma forma de enviar o arquivo da planilha e processar ele automaticamente, mas em breve será adicionado.
-
-A opção query vai solicitar que o usuário digite o ID do teste que foi inserido no ledger. O ID do teste pode ser checado na primeira coluna da planilha, basta inserir o ID no terminal e isso imprimirá o teste associado com este ID. Um exemplo de ID a ser inserido é `TEST-00001`.
+Para executar ambos os chaincodes, basta executar o script `client.js`. O código irá retornar algumas opções para o usuário, sendo elas: `(store_test | query_test | edit_test | storemodel | store_image | query_image)`. As 4 primeiras ações interagem com o chaincode `sollytch-chain`, enquanto as duas últimas interagem com o `sollytch-image`. Suas funcionalidades estão descritas abaixo:
+| Função | Funcionalidade |
+|--------|----------------|
+|store_test|Armazena um arquivo json que está na mesma pasta, nomeado `test.json` passando pelo processo de predição com os modelos de machine learning.|
+|query_test|Busca um teste por meio de um ID fornecido pelo usuário.|
+|edit_test|Busca um teste com um ID fornecido pelo usuário e permite alteração de itens do json.|
+|storemodel|Armazena um modelo de machine learning novo, atualizando o que estiver no ledger atualmente.|
+|store_image|Armazena o hash de uma imagem com uma chave fornecida pelo usuário. A imagem armazenada atualmente está na pasta cliente, porém pode ser alterada.|
+|query_image|Busca o hash de uma imagem já armazenada no ledger por meio de uma chave fornecida pelo usuário|
 
 ### Executando pela Interface de Teste
+
+>[!WARNING]
+>O CONTEÚDO ABAIXO ESTÁ DESATUALIZADO, NÃO SENDO FUNCIONAL NA VERSÃO ATUAL MAIS. POR FAVOR, IGNORE.
 
 O servidor agora está containerizado em Docker. Para executar, acesse a pasta client e execute o comando:
 ```bash
@@ -54,14 +74,14 @@ A interface mantém as mesmas funcionalidades de armazenamento e busca de testes
 
 ## Código do Chaincode
 
-O código principal do chaincode está dentro da pasta `/sollytch-chain` na raiz do projeto. O código `main.go` é o código principal do chaincode. Qualquer edição feita nele NÃO IRÁ SURTIR EFEITO IMEDIATO NA REDE. Caso alguma alteração seja feita no chaincode, será necessário fazer o upgrade do chaincode na rede. Isso pode ser feito com o comando abaixo:
+O código principal dos chaincodes estão dentro das pastas `/sollytch-chain` e `/sollytch-chain` na raiz do projeto. O código `main.go` é o código principal de ambos os chaincodes. Qualquer edição feita nele NÃO IRÁ SURTIR EFEITO IMEDIATO NA REDE. Caso alguma alteração seja feita no chaincode, será necessário fazer o upgrade do chaincode na rede. Isso pode ser feito com o comando abaixo:
 
 ```bash
 ./network.sh deployCCAAS -ccn sollytch-chain -ccs 2 -ccv 2.0 -ccp ../sollytch-chain/
 ```
-
-OBS: caso o chaincode precise de upgrade novamente, basta alterar os valores de `-ccs` e `-ccv`.
-
+> [!NOTE]
+> Caso o chaincode precise de upgrade novamente, basta alterar os valores de `-ccs` e `-ccv`, além de alterar o nome do chaincode (Ex.: sollytch-chain -> sollytch-image).
+ 
 ## Hyperledger Explorer
 
 O Hyperledger Explorer é uma ferramenta de gerenciamento da rede fabric. O explorer permite ver os seguintes itens da rede:
