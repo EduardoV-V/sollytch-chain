@@ -170,7 +170,7 @@ async function newSigner() {
     return signers.newPrivateKeySigner(privateKey);
 }
 
-async function invoke(contract) {
+async function storeTest(contract) {
     const jsonFilePath = require('path').join(__dirname, 'test.json');
     const testData = JSON.parse(fsRead.readFileSync(jsonFilePath, 'utf8'));
     const testID = testData.test_id;
@@ -231,7 +231,7 @@ async function storeImage(contract,imagePath, imageID) {
 async function editTest(contract) {
     const testID = (await askQuestion('testID do teste: ')).trim();
 
-    const testData = await query(contract, testID);
+    const testData = await queryTest(contract, testID);
     if (!testData) return;
 
     console.log('\nJSON atual:\n');
@@ -276,7 +276,7 @@ async function editTest(contract) {
     console.log('teste atualizado com sucesso');
 }
 
-async function query(contract, testID) {
+async function queryTest(contract, testID) {
     try {
         console.log(`consultando teste com ID: ${testID}`);
         const resultBytes = await contract.evaluateTransaction('QueryTest', testID);
@@ -362,11 +362,11 @@ async function main() {
         )).trim().toLowerCase();
 
         if (action === 'store_test') {
-            await invoke(sollytchChainContract);
+            await storeTest(sollytchChainContract);
 
         } else if (action === 'query_test') {
             const testID = (await askQuestion('testID: ')).trim();
-            await query(sollytchChainContract, testID);
+            await queryTest(sollytchChainContract, testID);
 
         } else if (action === 'storemodel') {
             await storeModel(sollytchChainContract);

@@ -1,5 +1,5 @@
 {
-  "test_id": "TEST-00087",
+  "test_id": "TEST-00088",
   "timestamp": "2025-07-15 22:13:00",
   "lat": -22.87496,
   "lon": -43.246872,
@@ -19,7 +19,7 @@
   "sample_temp_C": 26.3,
   "ambient_T_C": 19.6,
   "ambient_RH_pct": 80.8,
-  "lighting_lux": 308.2,
+  "lighting_lux": 309.2,
   "tilt_deg": 0.1,
   "preincubation_time_s": 27.2,
   "time_since_sampling_min": 23.0,

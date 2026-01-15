@@ -1,49 +1,74 @@
-const grpc = require('@grpc/grpc-js'); // importa grpc para conexao com o peer
-const { connect, hash, signers } = require('@hyperledger/fabric-gateway'); // importa metodos da fabric gateway
-const crypto = require('node:crypto'); // usado para lidar com chaves privadas
-const fs = require('node:fs/promises'); // leitura de arquivos usando promises
-const path = require('node:path'); // manipula caminhos
-const { TextDecoder } = require('node:util'); // decodifica texto em utf8
+/*
+ * Copyright IBM Corp. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-// configuracoes principais do canal e chaincode
-const channelName = ('mainchannel');
-const chaincodeName = ('sollytch-chain');
-const mspId = ('org1MSP');
+const grpc = require('@grpc/grpc-js');
+const readline = require('readline');
+const { connect, hash, signers } = require('@hyperledger/fabric-gateway');
+const crypto = require('node:crypto');
+const fsRead = require('fs');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { TextDecoder } = require('node:util');
 
-let network, contract, client, gateway // define as variáveis de conexão como globais para serem acessíveis por qualquer função
+const channelName = 'mainchannel';
+const chaincodeName = 'sollytch-chain';
+const mspId = 'org1MSP';
 
-// caminhos para os certificados e chaves
-const cryptoPath = path.resolve(__dirname,
-    '..',
-    '..',
-    'fabric',
-    'organizations',
-    'peerOrganizations',
-    'org1.example.com');
+const cryptoPath = path.resolve(__dirname, '..','fabric','organizations','peerOrganizations','org1.example.com');
 
-const keyDirectoryPath = path.resolve(cryptoPath,
+const keyDirectoryPath = path.resolve(
+    cryptoPath,
     'users',
-    'Admin@org1.example.com',
+    'User1@org1.example.com',
     'msp',
-    'keystore');
+    'keystore'
+);
 
-const certDirectoryPath = path.resolve(cryptoPath,
+const certDirectoryPath = path.resolve(
+    cryptoPath,
     'users',
-    'Admin@org1.example.com',
+    'User1@org1.example.com',
     'msp',
-    'signcerts');
+    'signcerts'
+);
 
-const tlsCertPath = path.resolve(cryptoPath,
+const tlsCertPath = path.resolve(
+    cryptoPath,
     'peers',
     'peer0.org1.example.com',
     'tls',
-    'ca.crt');
+    'ca.crt'
+);
 
-    const controleInternoEncoder = {
+const peerEndpoint = 'localhost:7051';
+const peerHostAlias = 'peer0.org1.example.com';
+
+const utf8Decoder = new TextDecoder();
+
+const controleInternoEncoder = {
     'ok': 2,
     'fail': 1,
     'invalid': 0
 };
+let sollytchImageContract, sollytchChainContract, network, client, gateway
+        
+function setNestedField(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+
+    for (let i = 0; i < keys.length - 1; i++) {
+        if (!(keys[i] in current)) {
+            throw new Error(`campo inexistente: ${keys.slice(0, i + 1).join('.')}`);
+        }
+        current = current[keys[i]];
+    }
+
+    current[keys[keys.length - 1]] = value;
+}
+
 
 function preprocessForPrediction(testData) {
     console.log("Processando dados para predição...");
@@ -60,18 +85,13 @@ function preprocessForPrediction(testData) {
     const categoricalFeatures = ['control_line_ok', 'controle_interno_result'];
     const allFeatures = [...numericFeatures, ...categoricalFeatures];
     
-    console.log(`🔧 Features selecionadas: ${allFeatures.length}`);
-    
-    // 2. CODIFICAR VARIÁVEIS CATEGÓRICAS (igual ao LabelEncoder do Python)
     const processedData = {...testData};
     
-    // Converter booleanos para inteiros
     if (typeof processedData.control_line_ok === 'boolean') {
         processedData.control_line_ok = processedData.control_line_ok ? 1 : 0;
         console.log(`Booleano convertido: control_line_ok → ${processedData.control_line_ok}`);
     }
     
-    // Codificar controle_interno_result
     if (processedData.controle_interno_result in controleInternoEncoder) {
         processedData.controle_interno_result = controleInternoEncoder[processedData.controle_interno_result];
         console.log(`Codificada 'controle_interno_result': ${testData.controle_interno_result} → ${processedData.controle_interno_result}`);
@@ -80,7 +100,6 @@ function preprocessForPrediction(testData) {
         console.log(`Valor desconhecido 'controle_interno_result': ${testData.controle_interno_result} → 0`);
     }
     
-    // 3. TRATAR VALORES NULOS (igual ao Python fillna(0))
     allFeatures.forEach(feature => {
         if (processedData[feature] === null || processedData[feature] === undefined) {
             processedData[feature] = 0;
@@ -88,12 +107,10 @@ function preprocessForPrediction(testData) {
         }
     });
     
-    // 4. TRATAR image_blur_score (null para 0)
     if (processedData.image_blur_score === null || processedData.image_blur_score === undefined) {
         processedData.image_blur_score = 0.0;
     }
     
-    // 5. CRIAR STRING CSV NO FORMATO ESPERADO
     const csvData = [
         processedData.lat,
         processedData.lon,
@@ -124,13 +141,6 @@ function preprocessForPrediction(testData) {
     return csvData;
 }
 
-// endereco e alias (nome) do peer
-const peerEndpoint = ('localhost:7051');
-const peerHostAlias = ('peer0.org1.example.com');
-
-const utf8Decoder = new TextDecoder();
-
-// cria conexao grpc com o peer
 async function newGrpcConnection() {
     const tlsRootCert = await fs.readFile(tlsCertPath);
     const tlsCredentials = grpc.credentials.createSsl(tlsRootCert);
@@ -139,99 +149,194 @@ async function newGrpcConnection() {
     });
 }
 
-// cria identidade usando certificado do admin
+async function getFirstDirFileName(dirPath) {
+    const files = await fs.readdir(dirPath);
+    const file = files[0];
+    if (!file) {
+        throw new Error(`No files in directory: ${dirPath}`);
+    }
+    return path.join(dirPath, file);
+}
+
 async function newIdentity() {
     const certPath = await getFirstDirFileName(certDirectoryPath);
     const credentials = await fs.readFile(certPath);
     return { mspId, credentials };
 }
 
-// pega o primeiro arquivo dentro de um diretorio
-async function getFirstDirFileName(dirPath) {
-    const files = await fs.readdir(dirPath);
-    const file = files[0];
-    if (!file) throw new Error(`No files in directory: ${dirPath}`);
-    return path.join(dirPath, file);
-}
-
-// cria o signer usando a chave privada
-// O signer é o que o fabric usa para assinar as transações feitas pelo usuário. Essa função usa a chave do usuário que está
-// chamando o chaincode para criar esse signer e assinar a transação com ele
 async function newSigner() {
-    const keyPath = await getFirstDirFileName(keyDirectoryPath); //busca a chave do user no diretório informado antes
+    const keyPath = await getFirstDirFileName(keyDirectoryPath);
     const privateKeyPem = await fs.readFile(keyPath);
-    const privateKey = crypto.createPrivateKey(privateKeyPem); //cria um objeto de chave privada com o crypto
+    const privateKey = crypto.createPrivateKey(privateKeyPem);
     return signers.newPrivateKeySigner(privateKey);
 }
 
-// executa uma transacao no ledger
-// pra executar uma função do chaincode, é usada a função "submitTransaction" da API do hyperledger fabric. No caso desse cliente,
-// a função a ser chamada está como hard coded, mas basta mudar o "StoreTest" para uma função ou outro nome
-// async function invoke(jsonString, testID) {
-//   await contract.submitTransaction("StoreTest", testID, jsonString) // Chama a função "StoreTest" com os parâmetros testID e jsonString
-//   // é importantissimo passar os parâmetros na mesma ordem do chaincode, caso contrário dará erro.
-//   console.log(`Teste ${testID} armazenado com sucesso no ledger.`); // log de confirmação
-// }
+async function storeTest(jsonStr) {
+    let testData
+    testData = JSON.parse(jsonFilePath);
+    const testID = testData.test_id;
+    console.log(testID)
+    
+    // Pré-processar os dados
+    const predictStr = preprocessForPrediction(testData);
 
-async function invoke(jsonString, testID) {
-    const predictStr = preprocessForPrediction(jsonString);
     try {
-        await contract.submitTransaction("StoreTest", testID, jsonString, predictStr);
+        await sollytchChainContract.submitTransaction("StoreTest", testID, jsonStr, predictStr);
         console.log("Teste armazenado com sucesso");
     } catch (error) {
         console.error("Erro:", error);
     }
 }
 
-// inicializa a conexao e define o contrato
-async function initialize() {
+function hashImage(path) {
+  const fileBuffer = fsRead.readFileSync(path);
+  const hash = crypto.createHash("sha512").update(fileBuffer).digest("hex");
+  return hash;
+}
+
+async function getImage(imageID) {
+    try {
+        const rawResult = await sollytchImageContract.evaluateTransaction("GetImage", imageID);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+        
+        console.log("JSON recebido:", jsonString.substring(0, 100) + "...");
+        
+        // Parse
+        const result = JSON.parse(jsonString);
+        return result.HashData;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
+async function storeImage(imagePath, imageID) {
+    const imageHash = hashImage(imagePath);
+    await sollytchImageContract.submitTransaction(
+        "StoreImage",
+        imageID,
+        imageHash
+    );
+
+    console.log("Imagem armazenada com sucesso!");
+}
+
+async function updateTest(testID, jsonStr) {
+    await sollytchChainContract.submitTransaction(
+        'UpdateTest',
+        testID,
+        JSON.stringify(testData)
+    );
+
+    console.log('teste atualizado com sucesso');
+}
+
+async function queryTest(testID) {
+    try {
+        console.log(`consultando teste com ID: ${testID}`);
+        const resultBytes = await sollytchChainContract.evaluateTransaction('QueryTest', testID);
+        console.log(resultBytes)
+        let resultString = resultBytes.toString('utf8');
+
+        if (/^\d+(,\d+)*$/.test(resultString.trim())) {
+            const byteArray = resultString.trim().split(',').map(n => parseInt(n));
+            resultString = Buffer.from(byteArray).toString('utf8');
+        }
+
+        const result = JSON.parse(resultString);
+        console.log(JSON.stringify(result, null, 2));
+        return result;
+
+    } catch (error) {
+        console.error('erro ao consultar teste', error);
+    }
+}
+
+async function storeModel(modelBase64, modelKey) {
+    // const modelKey = (await askQuestion(
+    //     'modelKey (acao_recomendada | result_class | qc_status): '
+    // )).trim();
+
+    // const filePath = (await askQuestion(
+    //     'caminho do arquivo do modelo (.model): '
+    // )).trim();
+
+    // // Lê o arquivo como binário
+    // const modelBuffer = await fs.readFile(filePath);
+
+    // // Converte para base64
+    // const modelBase64 = modelBuffer.toString('base64');
+
+    await sollytchChainContract.submitTransaction(
+        'StoreModel',
+        modelKey,
+        modelBase64
+    );
+
+    console.log(`modelo "${modelKey}" armazenado com sucesso no ledger`);
+}
+
+async function initialize(){
+    console.log('inicializando conexao')
     client = await newGrpcConnection();
     
     gateway = connect({
         client,
         identity: await newIdentity(),
         signer: await newSigner(),
+        hash: hash.sha256,
+        // Default timeouts for different gRPC calls
+        evaluateOptions: () => {
+            return { deadline: Date.now() + 5000 }; // 5 seconds
+        },
+        endorseOptions: () => {
+            return { deadline: Date.now() + 15000 }; // 15 seconds
+        },
+        submitOptions: () => {
+            return { deadline: Date.now() + 5000 }; // 5 seconds
+        },
+        commitStatusOptions: () => {
+            return { deadline: Date.now() + 60000 }; // 1 minute
+        },
     });
-
-    try {
-        network = gateway.getNetwork(channelName);
-        contract = network.getContract(chaincodeName);
-    } catch (err) {
-        console.error(err)
-    }
+    network = gateway.getNetwork(channelName);
+    sollytchChainContract = network.getContract('sollytch-chain');
+    sollytchImageContract = network.getContract('sollytch-image');
+    console.log('conexao finalizada')
 }
 
-// executa uma consulta no ledger
-async function query(fcn, testID) {
-    let result
-    if (fcn=='GetAllTests'){
-        result = await contract.evaluateTransaction('GetAllTests')
-    } else if (fcn=='QueryTest'){
-        result = await contract.evaluateTransaction('QueryTest', testID)
-    }
+async function main() {
+    client = await newGrpcConnection();
 
-    let resultString = result.toString('utf8');
-
-    // converte valores numericos em texto, se necessario
-    if (/^\d+(,\d+)*$/.test(resultString.trim())) {
-        const byteArray = resultString.trim().split(',').map(n => parseInt(n));
-        resultString = Buffer.from(byteArray).toString('utf8');
-    }
-
-    const resultJSON = JSON.parse(resultString)
-    return resultJSON
+    gateway = connect({
+        client,
+        identity: await newIdentity(),
+        signer: await newSigner(),
+        hash: hash.sha256,
+    });
 }
 
-// funcao para encerrar a conexao
 async function disconnect(){
     gateway.close();
     client.close();
 }
 
-//exporta as funções para acesso na api
-module.exports = {
+main().catch((error) => {
+    console.error('******** FAILED to run the application:', error);
+    process.exitCode = 1;
+});
+
+module.exports={
     initialize,
     disconnect,
-    invoke,
-    query,
+    storeTest,
+    queryTest,
+    storeImage,
+    getImage,
+    storeModel
 }
