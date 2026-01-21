@@ -39,7 +39,7 @@ const tlsCertPath = path.resolve(cryptoPath,
     'tls',
     'ca.crt');
 
-    const controleInternoEncoder = {
+const controleInternoEncoder = {
     'ok': 2,
     'fail': 1,
     'invalid': 0
@@ -48,7 +48,6 @@ const tlsCertPath = path.resolve(cryptoPath,
 function preprocessForPrediction(testData) {
     console.log("Processando dados para predição...");
     
-    // 1. IDENTIFICAR FEATURES (igual ao Python)
     const numericFeatures = [
         'expiry_days_left', 'distance_mm', 'time_to_migrate_s', 'sample_volume_uL',
         'sample_pH', 'sample_turbidity_NTU', 'sample_temp_C', 'ambient_T_C',
@@ -60,18 +59,13 @@ function preprocessForPrediction(testData) {
     const categoricalFeatures = ['control_line_ok', 'controle_interno_result'];
     const allFeatures = [...numericFeatures, ...categoricalFeatures];
     
-    console.log(`🔧 Features selecionadas: ${allFeatures.length}`);
-    
-    // 2. CODIFICAR VARIÁVEIS CATEGÓRICAS (igual ao LabelEncoder do Python)
     const processedData = {...testData};
     
-    // Converter booleanos para inteiros
     if (typeof processedData.control_line_ok === 'boolean') {
         processedData.control_line_ok = processedData.control_line_ok ? 1 : 0;
         console.log(`Booleano convertido: control_line_ok → ${processedData.control_line_ok}`);
     }
     
-    // Codificar controle_interno_result
     if (processedData.controle_interno_result in controleInternoEncoder) {
         processedData.controle_interno_result = controleInternoEncoder[processedData.controle_interno_result];
         console.log(`Codificada 'controle_interno_result': ${testData.controle_interno_result} → ${processedData.controle_interno_result}`);
@@ -80,7 +74,6 @@ function preprocessForPrediction(testData) {
         console.log(`Valor desconhecido 'controle_interno_result': ${testData.controle_interno_result} → 0`);
     }
     
-    // 3. TRATAR VALORES NULOS (igual ao Python fillna(0))
     allFeatures.forEach(feature => {
         if (processedData[feature] === null || processedData[feature] === undefined) {
             processedData[feature] = 0;
@@ -88,12 +81,10 @@ function preprocessForPrediction(testData) {
         }
     });
     
-    // 4. TRATAR image_blur_score (null para 0)
     if (processedData.image_blur_score === null || processedData.image_blur_score === undefined) {
         processedData.image_blur_score = 0.0;
     }
     
-    // 5. CRIAR STRING CSV NO FORMATO ESPERADO
     const csvData = [
         processedData.lat,
         processedData.lon,

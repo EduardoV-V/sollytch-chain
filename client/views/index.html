@@ -1,409 +1,338 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <!-- Aviso: Esse html é bem simples, é apenas uma interface de teste, não considere como nenhum produto final -->
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Execução de Chaincodes</title>
-    <style>
-      /* ===== VARIÁVEIS DE COR E TEMA ===== */
-      /* Define as cores principais usadas em todo o sistema */
-      :root {
-        --primary: #1e7a35;        /* Cor primária - verde principal */
-        --primary-dark: #145427;   /* Cor primária escura - para hover */
-        --bg: #f4fbf6;            /* Cor de fundo da página */
-        --card: #ffffff;           /* Cor de fundo do container principal */
-        --muted: #6b8b73;         /* Cor para textos secundários */
-      }
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Execução de Chaincodes</title>
 
-      /* ===== ESTILOS GERAIS ===== */
-      /* Centraliza todo o conteúdo vertical e horizontalmente na tela */
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        background-color: var(--bg);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-      }
+<style>
+:root {
+  --primary: #1e7a35;
+  --primary-dark: #145427;
+  --bg: #f4fbf6;
+  --card: #ffffff;
+  --muted: #6b8b73;
+}
 
-      /* ===== CONTAINER PRINCIPAL ===== */
-      /* Caixa branca que contém todo o formulário */
-      .container {
-        background: var(--card);
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        width: 90%;
-        max-width: 500px;
-        text-align: center;
-      }
+body {
+  font-family: Arial, sans-serif;
+  background-color: var(--bg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
 
-      /* Título principal do formulário */
-      .container h2 {
-        margin-bottom: 20px;
-        color: var(--primary-dark);
-      }
+.container {
+  background: var(--card);
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,.1);
+  width: 95%;
+  max-width: 600px;
+  text-align: center;
+}
 
-      /* ===== GRUPOS DE CAMPOS DO FORMULÁRIO ===== */
-      /* Container para cada campo do formulário com espaçamento consistente */
-      .form-group {
-        margin-bottom: 15px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
+h2 {
+  color: var(--primary-dark);
+}
 
-      /* ===== RÓTULOS DOS CAMPOS ===== */
-      /* Estilo para os labels dos campos do formulário */
-      .form-group label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: bold;
-        color: var(--muted);
-        width: 100%;
-        text-align: left;
-      }
+.form-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
 
-      /* ===== CAMPO TEST-ID COM PREFIXO FIXO ===== */
-      /* Container especial para o campo TEST-ID com prefixo não editável */
-      .test-id-wrapper {
-        display: flex;
-        align-items: center;
-        border: 1px solid #cfe6d4;
-        border-radius: 8px;
-        width: 100%;
-        background: white;
-        overflow: hidden;
-      }
+label {
+  font-weight: bold;
+  color: var(--muted);
+  text-align: left;
+  margin-bottom: 5px;
+}
 
-      /* Parte fixa do TEST-ID que mostra "TEST-" */
-      .test-id-prefix {
-        background: #e7f4ea;
-        color: var(--primary-dark);
-        font-family: "Courier New", monospace;
-        padding: 10px;
-        border-right: 1px solid #cfe6d4;
-        font-weight: bold;
-        user-select: none; /* Impede seleção de texto */
-      }
+select, textarea, input[type="file"] {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #cfe6d4;
+  font-size: 1rem;
+}
 
-      /* Campo de entrada para o número do teste */
-      #testNumber {
-        border: none;
-        outline: none;
-        padding: 10px;
-        font-size: 1rem;
-        font-family: "Courier New", monospace;
-        width: 100%;
-      }
+textarea {
+  font-family: monospace;
+}
 
-      /* ===== ESTILOS PARA CAMPOS E CHECKBOXES ===== */
-      /* Estilo para campo de seleção de arquivo */
-      .form-group input[type="file"],
-      .form-group .checkbox-wrapper {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px;
-        border: 1px solid #cfe6d4;
-        border-radius: 8px;
-        font-size: 1rem;
-        margin-bottom: 8px;
-      }
+.test-id-wrapper {
+  display: flex;
+  border: 1px solid #cfe6d4;
+  border-radius: 8px;
+  overflow: hidden;
+}
 
-      /* Container para checkboxes com alinhamento correto */
-      .checkbox-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        justify-content: flex-start;
-        padding: 8px;
-      }
+.test-id-prefix {
+  background: #e7f4ea;
+  padding: 10px;
+  font-family: monospace;
+  font-weight: bold;
+}
 
-      /* ===== BOTÕES ===== */
-      /* Container para os botões principais */
-      .button-group {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        margin-top: 10px;
-      }
+#testNumber {
+  border: none;
+  padding: 10px;
+  font-family: monospace;
+  width: 100%;
+}
 
-      /* Estilo base para os botões */
-      .button-group button {
-        padding: 10px 20px;
-        border: none;
-        background-color: var(--primary);
-        color: white;
-        border-radius: 8px;
-        font-size: 1rem;
-        cursor: pointer;
-        min-width: 120px;
-      }
+.hidden {
+  display: none;
+}
 
-      /* Efeito hover para os botões */
-      .button-group button:hover {
-        background-color: var(--primary-dark);
-      }
-    </style>
-  </head>
-  <body>
-    <!-- ===== FORMULÁRIO PRINCIPAL ===== -->
-    <div class="container">
-      <h2>Execução de Chaincodes</h2>
+button {
+  padding: 10px 20px;
+  background: var(--primary);
+  color: white;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
 
-      <!-- ===== CAMPO TEST ID ===== -->
-      <!-- Campo para inserir o identificador do teste com prefixo fixo -->
-      <div class="form-group">
-        <label for="testNumber">TEST-ID</label>
-        <div class="test-id-wrapper">
-          <span class="test-id-prefix">TEST-</span>
-          <input type="text" id="testNumber" placeholder="" />
-        </div>
-      </div>
+button:hover {
+  background: var(--primary-dark);
+}
+</style>
+</head>
 
-      <!-- ===== CAMPO PARA SELECIONAR ARQUIVO ===== -->
-      <!-- Permite ao usuário selecionar arquivos de dados para processamento -->
-      <div class="form-group">
-        <label for="fileInput">Arquivo (CSV, JSON, XLSX)</label>
-        <input type="file" id="fileInput" accept=".csv, .json, .xlsx" />
-      </div>
+<body>
+<div class="container">
+<h2>Execução de Chaincodes</h2>
 
-      <!-- ===== OPÇÕES DE CHECKBOX ===== -->
-      <!-- Opções de configuração para o processamento dos dados -->
-      <div class="form-group" style="align-items: flex-start; width:100%;">
-        <label class="checkbox-wrapper" for="searchAll">
-          <input type="checkbox" id="searchAll" />
-          <span>Buscar todos os testes?</span>
-        </label>
-        <br>
-        <label class="checkbox-wrapper" for="sendAllRows">
-          <input type="checkbox" id="sendAllRows" />
-          <span>Enviar todas as linhas do arquivo</span>
-        </label>
-      </div>
+<!-- OPERAÇÃO -->
+<div class="form-group">
+<label>Operação</label>
+<select id="operation">
+  <option value="store-test">Salvar Teste</option>
+  <option value="store-image">Salvar Imagem</option>
+  <option value="store-model">Salvar Modelo</option>
+  <option value="query-test">Consultar Teste</option>
+  <option value="query-image">Consultar Imagem</option>
+  <option value="update-test">Atualizar Teste</option>
+</select>
+</div>
 
-      <!-- ===== BOTÕES PRINCIPAIS ===== -->
-      <!-- Botões para executar as ações principais do sistema -->
-      <div class="button-group">
-        <button id="saveBtn" type="button">Salvar</button>
-        <button id="searchBtn" type="button">Busca</button>
-      </div>
-    </div>
+<!-- TEST ID NORMAL -->
+<div class="form-group" id="testIdGroup">
+<label id="testIdLabel">TEST-ID</label>
+<div class="test-id-wrapper">
+  <span class="test-id-prefix" id="testPrefix">TEST-</span>
+  <input id="testNumber" />
+</div>
+</div>
 
-    <!-- ===== BIBLIOTECA PARA PROCESSAMENTO DE PLANILHAS ===== -->
-    <!-- Biblioteca XLSX para leitura de arquivos Excel -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script>
-      // ===== FUNÇÕES DE CONVERSÃO DE DADOS =====
-      
-      /**
-       * Converte strings que representam números e booleanos em seus tipos reais
-       * @param {Object} obj - Objeto com valores a serem convertidos
-       * @returns {Object} - Objeto com valores convertidos para seus tipos apropriados
-       */
-      function convertTypes(obj) {
-        const result = {};
-        for (const [key, value] of Object.entries(obj)) {
-          if (typeof value === "string") {
-            const lower = value.trim().toLowerCase();
-            if (lower === "true") { result[key] = true; continue; }
-            if (lower === "false") { result[key] = false; continue; }
-            if (!isNaN(value) && value.trim() !== "") {
-              result[key] = parseFloat(value);
-              continue;
-            }
-          }
-          result[key] = value;
-        }
-        return result;
-      }
+<!-- MODEL SELECT -->
+<div class="form-group hidden" id="modelKeyGroup">
+<label>Model Key</label>
+<select id="modelKey">
+  <option value="acao_recomendada">acao_recomendada</option>
+  <option value="qc_status">qc_status</option>
+  <option value="result_class">result_class</option>
+</select>
+</div>
 
-      /**
-       * Converte valores numéricos do Excel para strings de data no formato ISO
-       * @param {number} serial - Número serial de data do Excel
-       * @returns {string} - Data no formato ISO string
-       */
-      function excelSerialToDateString(serial) {
-        const excelEpoch = new Date(1899, 11, 30); // Data base do Excel (30/12/1899)
-        const millisecondsPerDay = 24 * 60 * 60 * 1000;
-        const date = new Date(excelEpoch.getTime() + serial * millisecondsPerDay);
-        return date.toISOString();
-      }
+<!-- ARQUIVO -->
+<div class="form-group">
+<label>Arquivo</label>
+<input type="file" id="fileInput" />
+</div>
 
-      /**
-       * Aplica conversão de datas do Excel em objetos
-       * @param {Object} obj - Objeto com possíveis datas no formato Excel
-       * @returns {Object} - Objeto com datas convertidas para formato ISO
-       */
-      function convertExcelDates(obj) {
-        const result = {};
-        for (const [key, value] of Object.entries(obj)) {
-          // Verifica se é um número que pode representar uma data do Excel
-          if (typeof value === 'number' && value > 25567 && value < 50000) {
-            result[key] = excelSerialToDateString(value);
-          } else if (typeof value === 'number' && key.toLowerCase().includes('timestamp')) {
-            result[key] = excelSerialToDateString(value);
-          } else if (typeof value === 'number' && key.toLowerCase().includes('date')) {
-            result[key] = excelSerialToDateString(value);
-          } else {
-            result[key] = value;
-          }
-        }
-        return result;
-      }
+<!-- JSON EDITOR -->
+<div class="form-group hidden" id="jsonEditorGroup">
+<label>JSON do Teste</label>
+<textarea id="jsonEditor" rows="10"></textarea>
+</div>
 
-      // ===== FUNÇÕES DE COMUNICAÇÃO COM A API =====
-      
-      /**
-       * Envia dados para a API via método POST
-       * @param {string} url - Endpoint da API
-       * @param {Object} data - Dados a serem enviados
-       * @returns {Promise} - Promise com a resposta da API
-       */
-      async function postData(url, data) {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-        return response.json();
-      }
+<!-- Box de result do hash da imagem -->
+<div class="form-group hidden" id="imageResultGroup">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <label>Hash da Imagem</label>
+    <button type="button" id="copyHashBtn">Copiar</button>
+  </div>
+  <textarea id="imageResult" rows="2" readonly></textarea>
+</div>
 
-      /**
-       * Monta o ID completo do teste combinando prefixo e número
-       * @returns {string} - ID completo do teste no formato "TEST-XXXX"
-       */
-      function getFullTestId() {
-        const num = document.getElementById("testNumber").value.trim();
-        return "TEST-" + num;
-      }
+<button id="executeBtn">Executar</button>
+</div>
 
-      // ===== FUNÇÕES DE PROCESSAMENTO DE ARQUIVOS =====
-      
-      /**
-       * Lê arquivo CSV, JSON ou XLSX e retorna array de objetos
-       * @param {File} file - Arquivo a ser processado
-       * @param {boolean} sendAll - Se deve retornar todas as linhas ou apenas a primeira
-       * @returns {Promise<Array>} - Promise com array de objetos dos dados do arquivo
-       */
-      async function readFileAsJson(file, sendAll) {
-        const extension = file.name.split('.').pop().toLowerCase();
+<script>
+const operation = document.getElementById("operation");
+const testPrefix = document.getElementById("testPrefix");
+const testIdGroup = document.getElementById("testIdGroup");
+const modelKeyGroup = document.getElementById("modelKeyGroup");
+const testIdLabel = document.getElementById("testIdLabel");
 
-        // Processamento de arquivos JSON
-        if (extension === "json") {
-          const text = await file.text();
-          const data = JSON.parse(text);
-          return Array.isArray(data) ? data : [data];
-        }
+let updateLoaded = false;
 
-        // Processamento de arquivos CSV
-        if (extension === "csv") {
-          const text = await file.text();
-          const lines = text.trim().split("\n");
-          const headers = lines[0].split(",").map(h => h.trim());
-          if (lines.length < 2) throw new Error("O CSV está vazio ou sem dados.");
-          
-          const rows = lines.slice(1).map(line => {
-            const values = line.split(",").map(v => v.trim());
-            const rawData = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
-            return convertTypes(convertExcelDates(rawData));
-          });
-          
-          return sendAll ? rows : [rows[0]];
-        }
+copyHashBtn.onclick = () => {
+  imageResult.select();
+  document.execCommand("copy");
+  alert("Hash copiado para a área de transferência");
+};
 
-        // Processamento de arquivos XLSX (Excel)
-        if (extension === "xlsx") {
-          const data = await file.arrayBuffer();
-          const workbook = XLSX.read(data, { type: "array" });
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: 'yyyy-mm-dd HH:MM:ss' });
-          
-          if (!rows.length) throw new Error("O arquivo XLSX está vazio.");
-          const converted = rows.map(r => convertTypes(convertExcelDates(r)));
-          return sendAll ? converted : [converted[0]];
-        }
+operation.onchange = () => {
+  const op = operation.value;
 
-        throw new Error("Formato de arquivo não suportado (use .csv, .xlsx ou .json)");
-      }
+  testIdGroup.classList.remove("hidden");
+  modelKeyGroup.classList.add("hidden");
 
-      // ===== EVENT LISTENERS PARA OS BOTÕES =====
-      
-      /**
-       * Botão para salvar - executa operação de invoke na blockchain
-       * Processa o arquivo selecionado e envia os dados para a API
-       */
-      document.getElementById("saveBtn").addEventListener("click", async () => {
-        const fileInput = document.getElementById("fileInput");
-        const sendAll = document.getElementById("sendAllRows").checked;
+  if (op === "store-image" || op === "query-image") {
+    testPrefix.innerText = "";
+    testIdLabel.innerText = "IMAGE-ID";
+  } 
+  else if (op === "store-model") {
+    testIdGroup.classList.add("hidden");
+    modelKeyGroup.classList.remove("hidden");
+  } 
+  else {
+    testPrefix.innerText = "TEST-";
+    testIdLabel.innerText = "TEST-ID";
+  }
+};
 
-        // Valida se um arquivo foi selecionado
-        if (fileInput.files.length === 0) {
-          alert("Selecione um arquivo primeiro!");
-          return;
-        }
+function getTestID() {
+  const op = operation.value;
+  const value = document.getElementById("testNumber").value.trim();
 
-        try {
-          const file = fileInput.files[0];
-          const dataArray = await readFileAsJson(file, sendAll);
+  if (op === "store-image" || op === "query-image") {
+    return value;
+  }
 
-          // Processa cada linha do arquivo
-          for (let i = 0; i < dataArray.length; i++) {
-            const data = dataArray[i];
-            
-            // Tenta extrair o testID de diferentes formatos possíveis
-            let testID = data.test_id || data.TestID || data["TEST ID"] || data["test ID"] || null;
-            
-            // Se não encontrou testID, gera um automático
-            if (!testID) {
-              testID = `TEST-${i + 1}`;
-              console.warn(`TestID não encontrado na linha ${i + 1}. Usando ${testID}`);
-            }
+  return "TEST-" + value;
+}
 
-            const body = { testID, data };
-            const result = await postData("/invoke", body);
-            console.log(`Linha ${i + 1}:`, result);
+async function postJSON(url, data, method = "POST") {
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 
-            // Se não é para enviar tudo, para após a primeira linha
-            if (!sendAll) break;
-            
-            // Se é para enviar tudo, pergunta confirmação para próxima linha (exceto a última)
-            if (i < dataArray.length - 1) {
-              const cont = confirm(`Linha ${i + 1} enviada (ID: ${testID}). Deseja enviar a próxima (${i + 2}/${dataArray.length})?`);
-              if (!cont) {
-                alert("Envio interrompido pelo usuário.");
-                break;
-              }
-            }
-          }
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
 
-          alert("Envio concluído!");
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao processar o arquivo: " + err.message);
-        }
-      });
+  return res.json();
+}
 
-      /**
-       * Botão de busca - executa operação de query na blockchain
-       * Busca testes na blockchain com base nos critérios selecionados
-       */
-      document.getElementById("searchBtn").addEventListener("click", async () => {
-        const testID = getFullTestId();
-        const searchAll = document.getElementById("searchAll").checked;
-        
-        // Define a função a ser chamada na blockchain
-        const fcn = searchAll ? "GetAllTests" : "QueryTest";
-        const body = { fcn, testID };
-        
-        const result = await postData("/query", body);
-        console.log("Resultado da busca:", result);
-        alert(JSON.stringify(result, null, 2));
-      });
-    </script>
-  </body>
+/* -------- STORE -------- */
+
+async function handleStoreTest() {
+  const file = fileInput.files[0];
+  if (!file) return alert("Selecione um arquivo");
+
+  const data = JSON.parse(await file.text());
+  await postJSON("/store/test", { data });
+
+  alert("Teste armazenado");
+}
+
+async function handleStoreImage() {
+  const form = new FormData();
+  form.append("image", fileInput.files[0]);
+  form.append("imageID", getTestID());
+
+  const res = await fetch("/store/image", {
+    method: "POST",
+    body: form
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  alert("Imagem armazenada");
+}
+
+async function handleStoreModel() {
+  const form = new FormData();
+  form.append("model", fileInput.files[0]);
+  form.append("modelKey", document.getElementById("modelKey").value);
+
+  const res = await fetch("/store-model", {
+    method: "POST",
+    body: form
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  alert("Modelo armazenado");
+}
+
+/* -------- QUERY -------- */
+
+async function handleQueryTest() {
+  const result = await postJSON("/query/test", {
+    testID: getTestID()
+  });
+
+  jsonEditor.value = JSON.stringify(result, null, 2);
+  jsonEditorGroup.classList.remove("hidden");
+}
+
+async function handleQueryImage() {
+  const result = await postJSON("/query/image", {
+    imageID: getTestID()
+  });
+
+  imageResult.value = result.hash || "";
+  imageResultGroup.classList.remove("hidden");
+}
+
+/* -------- UPDATE -------- */
+
+async function handleUpdateTest() {
+  const testID = getTestID();
+
+  if (!updateLoaded) {
+    const current = await postJSON(
+      "/query/test",
+      { testID }
+    );
+
+    jsonEditor.value = JSON.stringify(current, null, 2);
+    jsonEditorGroup.classList.remove("hidden");
+
+    updateLoaded = true;
+    alert("Teste carregado. Edite os dados e clique em Executar novamente para salvar.");
+    return;
+  }
+
+  if (!confirm("Deseja salvar as alterações?")) return;
+
+  const parsed = JSON.parse(jsonEditor.value);
+
+  await postJSON(
+    "/update/test",
+    { testID, data: parsed },
+    "PUT"
+  );
+
+  alert("Teste atualizado com sucesso");
+
+  updateLoaded = false;
+}
+
+/* -------- DISPATCH -------- */
+
+executeBtn.onclick = async () => {
+  const op = operation.value;
+
+  try {
+    if (op === "store-test") return handleStoreTest();
+    if (op === "store-image") return handleStoreImage();
+    if (op === "store-model") return handleStoreModel();
+    if (op === "query-test") return handleQueryTest();
+    if (op === "query-image") return handleQueryImage();
+    if (op === "update-test") return handleUpdateTest();
+  } catch (err) {
+    console.error(err);
+    alert("Erro:\n" + err.message);
+  }
+};
+</script>
+</body>
 </html>
