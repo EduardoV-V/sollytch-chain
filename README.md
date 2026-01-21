@@ -59,17 +59,14 @@ Para executar ambos os chaincodes, basta executar o script `client.js`. O códig
 
 ### Executando pela Interface de Teste
 
->[!WARNING]
->O CONTEÚDO ABAIXO ESTÁ DESATUALIZADO, NÃO SENDO FUNCIONAL NA VERSÃO ATUAL MAIS. POR FAVOR, IGNORE.
-
-O servidor agora está containerizado em Docker. Para executar, acesse a pasta client e execute o comando:
+A interface web agora está containerizada em Docker. Para executar, acesse a pasta client e execute o comando:
 ```bash
 docker-compose up -d
 ```
 
 Isso levantará automaticamente a interface na porta 3000, acessível em localhost:3000 ou no IP da máquina host. O container ficará rodando continuamente em background, sem necessidade de manter o terminal aberto e pode ser derrubado com o comando `docker-compose down -v`
 
-A interface mantém as mesmas funcionalidades de armazenamento e busca de testes, permitindo buscar todos os testes ou por ID específico, além de importar dados de planilhas xlsx, csv ou json. O arquivo sollytch.xlsx na pasta client serve como exemplo para o formato esperado.
+A interface mantém as mesmas funcionalidades de armazenamento e busca de testes e imagens, além do armazenamento dos modelos de Machine learning. No momento, apenas foi testado o upload de arquivos .json, que é certo de funcionar. O arquivo test.json na pasta client serve como exemplo para o formato esperado.
 
 
 ## Código do Chaincode
