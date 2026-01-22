@@ -13,7 +13,7 @@ const channelName = 'mainchannel';
 // const chaincodeName = 'sollytch-chain';
 const mspId = 'org1MSP';
 
-const cryptoPath = path.resolve(__dirname, '..','..','fabric','organizations','peerOrganizations','org1.example.com');
+const cryptoPath = path.resolve(__dirname, 'crypto');
 
 const keyDirectoryPath = path.resolve(
     cryptoPath,
@@ -39,7 +39,7 @@ const tlsCertPath = path.resolve(
     'ca.crt'
 );
 
-const peerEndpoint = 'localhost:7051';
+const peerEndpoint = '10.203.71.1:7051';
 const peerHostAlias = 'peer0.org1.example.com';
 
 const utf8Decoder = new TextDecoder();
