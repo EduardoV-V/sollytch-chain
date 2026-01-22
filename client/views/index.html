@@ -253,7 +253,7 @@ async function handleStoreModel() {
   form.append("model", fileInput.files[0]);
   form.append("modelKey", document.getElementById("modelKey").value);
 
-  const res = await fetch("/store-model", {
+  const res = await fetch("/store/model", {
     method: "POST",
     body: form
   });
@@ -262,7 +262,7 @@ async function handleStoreModel() {
   alert("Modelo armazenado");
 }
 
-/* -------- QUERY -------- */
+//rotas query
 
 async function handleQueryTest() {
   const result = await postJSON("/query/test", {
@@ -282,7 +282,7 @@ async function handleQueryImage() {
   imageResultGroup.classList.remove("hidden");
 }
 
-/* -------- UPDATE -------- */
+//rota update
 
 async function handleUpdateTest() {
   const testID = getTestID();
@@ -316,7 +316,7 @@ async function handleUpdateTest() {
   updateLoaded = false;
 }
 
-/* -------- DISPATCH -------- */
+//dispatch de chamadas
 
 executeBtn.onclick = async () => {
   const op = operation.value;
