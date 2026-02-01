@@ -196,19 +196,17 @@ function hashImage(path) {
   return hash;
 }
 
-async function getImage(contract,imageID) {
+async function getImageByID(contract,imageID) {
     try {
-        const rawResult = await contract.evaluateTransaction("GetImage", imageID);
+        const rawResult = await contract.evaluateTransaction("GetImageByID", imageID);
         
         let jsonString = "";
         for (const byte of rawResult) {
             jsonString += String.fromCharCode(byte);
         }
         
-        console.log("JSON recebido:", jsonString.substring(0, 100) + "...");
-        
-        // Parse
         const result = JSON.parse(jsonString);
+        console.log(result)
         return result.HashData;
         
     } catch (error) {
@@ -217,11 +215,32 @@ async function getImage(contract,imageID) {
     }
 }
 
-async function storeImage(contract,imagePath, imageID) {
+async function getImagesByKit(contract,kitID) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetImagesByKit", kitID);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+         
+        const result = JSON.parse(jsonString);
+        console.log(result)
+        return result;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
+async function storeImage(contract,imagePath) {
+    const kitID = 'teste2'
     const imageHash = hashImage(imagePath)
     await contract.submitTransaction(
         "StoreImage",
-        imageID,
+        imageHash,
+        kitID,
         imageHash
     );
 
@@ -375,14 +394,21 @@ async function main() {
             await editTest(sollytchChainContract);
 
         } else if (action === 'store_image') {
-            const imageID = (await askQuestion('imageID: ')).trim();
+            // const imageID = (await askQuestion('imageID: ')).trim();
             const imagePath = "./imagem.jpg" 
-            await storeImage(sollytchImageContract,imagePath,imageID);
+            await storeImage(sollytchImageContract,imagePath);
 
         } else if (action === 'query_image') {
-            const imageID = (await askQuestion('imageID: ')).trim();
-            await getImage(sollytchImageContract,imageID);
-
+            const whichQuery = (await askQuestion("Buscar pelo kit ou por imagem individual? (kit | imagem)")).trim();
+            if (whichQuery === "kit"){
+                const kitID = await askQuestion('Insira o id do kit: ')
+                await getImagesByKit(sollytchImageContract, kitID)
+            } else if (whichQuery === "imagem"){
+                const imgID = await askQuestion('Insira o id da imagem: ')
+                await getImageByID(sollytchImageContract,imgID)
+            }else{
+                console.log("opcao invalida")
+            }
         } else {
             console.log('acao invalida');
         }

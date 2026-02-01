@@ -3,85 +3,162 @@ package main
 import (
     "encoding/json"
     "fmt"
+    "time"
 
-   	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+    "github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// Estrutura que representa os dados da imagem
 type ImageAsset struct {
-    Key        string   `json:"key"`
-    HashData   string   `json:"hashData"`
+    IDImagem      string `json:"idImagem"`
+    IDKit         string `json:"idKit"`
+    Timestamp     string `json:"timestamp"`
+    HashData      string `json:"hashData"`
+
+    Version       int    `json:"version"`
+    LastUpdatedAt string `json:"lastUpdatedAt"`
 }
 
-// SmartContract define a estrutura do chaincode com os métodos disponíveis
 type SmartContract struct {
-	contractapi.Contract
+    contractapi.Contract
 }
 
-// StoreImage armazena o hash da imagem no ledger
-func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, key string, hashData string) error {
-    if key == "" {
-        return fmt.Errorf("a chave não pode ser vazia")
-    }
-    if hashData == "" {
-        return fmt.Errorf("o conteúdo do hash não pode ser vazio")
-    }
+func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, idImagem string, idKit string, hashData string) error {
 
-    exists, err := c.ImageExists(ctx, key)
-    if err != nil {
-        return err
-    }
-    if exists {
-        return fmt.Errorf("já existe uma imagem registrada com a chave %s", key)
-    }
+	if idImagem == "" || idKit == "" {
+		return fmt.Errorf("idImagem e idKit são obrigatórios")
+	}
 
-    asset := ImageAsset{
-        Key:        key,
-        HashData: hashData,
-    }
+	imageKey := idImagem
 
-    jsonBytes, err := json.Marshal(asset)
-    if err != nil {
-        return fmt.Errorf("erro ao serializar JSON: %v", err)
-    }
+	txTime, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return err
+	}
 
-    return ctx.GetStub().PutState(key, jsonBytes)
+	formattedTime := time.Unix(
+		txTime.Seconds,
+		int64(txTime.Nanos),
+	).UTC().Format(time.RFC3339)
+
+	exists, err := c.ImageExists(ctx, imageKey)
+	if err != nil {
+		return err
+	}
+
+	var asset ImageAsset
+
+	if exists {
+		assetBytes, err := ctx.GetStub().GetState(imageKey)
+		if err != nil {
+			return err
+		}
+		if assetBytes == nil {
+			return fmt.Errorf("falha ao carregar imagem existente %s", idImagem)
+		}
+
+		if err := json.Unmarshal(assetBytes, &asset); err != nil {
+			return err
+		}
+
+		asset.HashData = hashData
+		asset.Version++
+		asset.LastUpdatedAt = formattedTime
+
+	} else {
+		asset = ImageAsset{
+			IDImagem:      idImagem,
+			IDKit:         idKit,
+			Timestamp:     formattedTime,
+			HashData:      hashData,
+			Version:       0,
+			LastUpdatedAt: formattedTime,
+		}
+
+		indexKey, err := ctx.GetStub().CreateCompositeKey(
+			"kit~image",
+			[]string{idKit, idImagem},
+		)
+		if err != nil {
+			return err
+		}
+
+		if err := ctx.GetStub().PutState(indexKey, []byte{0x00}); err != nil {
+			return err
+		}
+	}
+
+	assetBytes, err := json.Marshal(asset)
+	if err != nil {
+		return err
+	}
+
+	return ctx.GetStub().PutState(imageKey, assetBytes)
 }
 
-func (c *SmartContract) GetImage(ctx contractapi.TransactionContextInterface, key string) (string, error) {
-    if key == "" {
-        return "", fmt.Errorf("a chave não pode ser vazia")
-    }
-
-    data, err := ctx.GetStub().GetState(key)
-    if err != nil {
-        return "", fmt.Errorf("erro ao buscar estado: %v", err)
-    }
-    if data == nil {
-        return "", fmt.Errorf("nenhuma imagem encontrada com a chave %s", key)
-    }
-
-    // Retorna direto como string - NÃO FAZ UNMARSHAL!
-    return string(data), nil
-}
-
-func (c *SmartContract) GetImageAsset(ctx contractapi.TransactionContextInterface, key string) (*ImageAsset, error) {
-    jsonStr, err := c.GetImage(ctx, key)
+func (c *SmartContract) GetImagesByKit(ctx contractapi.TransactionContextInterface, idKit string,) ([]*ImageAsset, error) {
+    iterator, err := ctx.GetStub().GetStateByPartialCompositeKey(
+        "kit~image",
+        []string{idKit},
+    )
     if err != nil {
         return nil, err
     }
-    
-    var asset ImageAsset
-    err = json.Unmarshal([]byte(jsonStr), &asset)
-    if err != nil {
-        return nil, fmt.Errorf("erro ao deserializar JSON: %v", err)
+    defer iterator.Close()
+
+    var results []*ImageAsset
+
+    for iterator.HasNext() {
+        response, err := iterator.Next()
+        if err != nil {
+            return nil, err
+        }
+
+        _, parts, err := ctx.GetStub().SplitCompositeKey(response.Key)
+        if err != nil {
+            return nil, err
+        }
+
+        idImagem := parts[1]
+
+        image, err := c.GetImageByID(ctx, idImagem)
+        if err != nil {
+            return nil, err
+        }
+
+        results = append(results, image)
     }
-    
+
+    return results, nil
+}
+
+func (c *SmartContract) GetImageByID(ctx contractapi.TransactionContextInterface, idImagem string,
+) (*ImageAsset, error) {
+
+    if idImagem == "" {
+        return nil, fmt.Errorf("idImagem não pode ser vazio")
+    }
+
+    imageKey := idImagem
+
+    data, err := ctx.GetStub().GetState(imageKey)
+    if err != nil {
+        return nil, fmt.Errorf("erro ao acessar o ledger: %v", err)
+    }
+    if data == nil {
+        return nil, fmt.Errorf("imagem %s não encontrada", idImagem)
+    }
+
+    var asset ImageAsset
+    if err := json.Unmarshal(data, &asset); err != nil {
+        return nil, fmt.Errorf("erro ao deserializar imagem: %v", err)
+    }
+
     return &asset, nil
 }
 
-// ImageExists verifica se já existe uma imagem com a chave fornecida
-func (c *SmartContract) ImageExists(ctx contractapi.TransactionContextInterface, key string) (bool, error) {
+func (c *SmartContract) ImageExists(ctx contractapi.TransactionContextInterface, key string,
+) (bool, error) {
+
     data, err := ctx.GetStub().GetState(key)
     if err != nil {
         return false, fmt.Errorf("erro ao verificar estado: %v", err)
@@ -89,16 +166,13 @@ func (c *SmartContract) ImageExists(ctx contractapi.TransactionContextInterface,
     return data != nil, nil
 }
 
-// main inicia a execução do chaincode no blockchain
 func main() {
-	// Cria uma nova instância do chaincode
-	chaincode, err := contractapi.NewChaincode(new(SmartContract))
-	if err != nil {
-		panic(fmt.Sprintf("erro criando chaincode: %v", err))
-	}
+    chaincode, err := contractapi.NewChaincode(new(SmartContract))
+    if err != nil {
+        panic(fmt.Sprintf("erro criando chaincode: %v", err))
+    }
 
-	// Inicia o chaincode e aguarda por transações
-	if err := chaincode.Start(); err != nil {
-		panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
-	}
+    if err := chaincode.Start(); err != nil {
+        panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
+    }
 }

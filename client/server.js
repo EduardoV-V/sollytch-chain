@@ -39,6 +39,7 @@ app.get('/', (req, res) => {
 
 app.post('/store/test', async (req, res) => {
   let { testID, data } = req.body;
+  console.log(testID, data)
 
   try {
     if (!Array.isArray(data)) data = [data];

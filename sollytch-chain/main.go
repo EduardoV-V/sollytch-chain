@@ -392,13 +392,15 @@ func (s *SmartContract) QueryTest(ctx contractapi.TransactionContextInterface, t
 	return &record, nil
 }
 
-
+// main inicia a execução do chaincode no blockchain
 func main() {
+	// Cria uma nova instância do chaincode
 	chaincode, err := contractapi.NewChaincode(new(SmartContract))
 	if err != nil {
 		panic(fmt.Sprintf("erro criando chaincode: %v", err))
 	}
-
+	
+	// Inicia o chaincode e aguarda por transações
 	if err := chaincode.Start(); err != nil {
 		panic(fmt.Sprintf("erro iniciando chaincode: %v", err))
 	}
