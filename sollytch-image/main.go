@@ -9,26 +9,26 @@ import (
 )
 
 type ImageAsset struct {
-    IDImagem      string `json:"idImagem"`
-    IDKit         string `json:"idKit"`
-    Timestamp     string `json:"timestamp"`
-    HashData      string `json:"hashData"`
-
     Version       int    `json:"version"`
     LastUpdatedAt string `json:"lastUpdatedAt"`
+
+    IDKit         string `json:"idKit"`
+    
+    Timestamp     string `json:"timestamp"`
+    HashData      string `json:"hashData"`
 }
 
 type SmartContract struct {
     contractapi.Contract
 }
 
-func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, idImagem string, idKit string, hashData string) error {
+func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, idKit string, hashData string) error {
 
-	if idImagem == "" || idKit == "" {
-		return fmt.Errorf("idImagem e idKit são obrigatórios")
+	if hashData == "" || idKit == "" {
+		return fmt.Errorf("hashData e idKit são obrigatórios")
 	}
 
-	imageKey := idImagem
+	imageKey := hashData
 
 	txTime, err := ctx.GetStub().GetTxTimestamp()
 	if err != nil {
@@ -53,7 +53,7 @@ func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, 
 			return err
 		}
 		if assetBytes == nil {
-			return fmt.Errorf("falha ao carregar imagem existente %s", idImagem)
+			return fmt.Errorf("falha ao carregar imagem existente com hash %s", hashData)
 		}
 
 		if err := json.Unmarshal(assetBytes, &asset); err != nil {
@@ -66,7 +66,6 @@ func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, 
 
 	} else {
 		asset = ImageAsset{
-			IDImagem:      idImagem,
 			IDKit:         idKit,
 			Timestamp:     formattedTime,
 			HashData:      hashData,
@@ -75,8 +74,8 @@ func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, 
 		}
 
 		indexKey, err := ctx.GetStub().CreateCompositeKey(
-			"kit~image",
-			[]string{idKit, idImagem},
+			"kit~hashImagem",
+			[]string{idKit, hashData},
 		)
 		if err != nil {
 			return err
@@ -97,7 +96,7 @@ func (c *SmartContract) StoreImage(ctx contractapi.TransactionContextInterface, 
 
 func (c *SmartContract) GetImagesByKit(ctx contractapi.TransactionContextInterface, idKit string,) ([]*ImageAsset, error) {
     iterator, err := ctx.GetStub().GetStateByPartialCompositeKey(
-        "kit~image",
+        "kit~hashImagem",
         []string{idKit},
     )
     if err != nil {
@@ -118,9 +117,9 @@ func (c *SmartContract) GetImagesByKit(ctx contractapi.TransactionContextInterfa
             return nil, err
         }
 
-        idImagem := parts[1]
+        hashImagem := parts[1]
 
-        image, err := c.GetImageByID(ctx, idImagem)
+        image, err := c.GetImageByID(ctx, hashImagem)
         if err != nil {
             return nil, err
         }
@@ -131,21 +130,19 @@ func (c *SmartContract) GetImagesByKit(ctx contractapi.TransactionContextInterfa
     return results, nil
 }
 
-func (c *SmartContract) GetImageByID(ctx contractapi.TransactionContextInterface, idImagem string,
-) (*ImageAsset, error) {
-
-    if idImagem == "" {
-        return nil, fmt.Errorf("idImagem não pode ser vazio")
+func (c *SmartContract) GetImageByID(ctx contractapi.TransactionContextInterface, hashImagem string,) (*ImageAsset, error) {
+    if hashImagem == "" {
+        return nil, fmt.Errorf("hashImagem não pode ser vazio")
     }
 
-    imageKey := idImagem
+    imageKey := hashImagem
 
     data, err := ctx.GetStub().GetState(imageKey)
     if err != nil {
         return nil, fmt.Errorf("erro ao acessar o ledger: %v", err)
     }
     if data == nil {
-        return nil, fmt.Errorf("imagem %s não encontrada", idImagem)
+        return nil, fmt.Errorf("imagem %s não encontrada", hashImagem)
     }
 
     var asset ImageAsset
@@ -156,9 +153,7 @@ func (c *SmartContract) GetImageByID(ctx contractapi.TransactionContextInterface
     return &asset, nil
 }
 
-func (c *SmartContract) ImageExists(ctx contractapi.TransactionContextInterface, key string,
-) (bool, error) {
-
+func (c *SmartContract) ImageExists(ctx contractapi.TransactionContextInterface, key string,) (bool, error) {
     data, err := ctx.GetStub().GetState(key)
     if err != nil {
         return false, fmt.Errorf("erro ao verificar estado: %v", err)

@@ -190,6 +190,44 @@ async function invoke(contract) {
     }
 }
 
+async function getTestByID(contract,testID) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetTestByID", testID);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+        
+        const result = JSON.parse(jsonString);
+        console.log(result)
+        return result.HashData;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
+async function getTestByLote(contract,lote) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetTestsByLote", lote);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+         
+        const result = JSON.parse(jsonString);
+        console.log(result)
+        return result;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
 function hashImage(path) {
   const fileBuffer = fsRead.readFileSync(path);
   const hash = crypto.createHash("sha512").update(fileBuffer).digest("hex");
@@ -239,12 +277,61 @@ async function storeImage(contract,imagePath) {
     const imageHash = hashImage(imagePath)
     await contract.submitTransaction(
         "StoreImage",
-        imageHash,
         kitID,
         imageHash
     );
 
     console.log("Imagem armazenada com sucesso!");
+}
+
+async function storePlanilha(contract, planilhaPath) {
+    const lote = 'C23017'
+    const planilhaHash = hashImage(planilhaPath)
+    await contract.submitTransaction(
+        "StorePlanilha",
+        lote,
+        planilhaHash
+    );
+
+    console.log("planilha armazenada com sucesso!");
+}
+
+async function getPlanilhaByHash(contract,planilhaHash) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetPlanilhaByHash", planilhaHash);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+        
+        const result = JSON.parse(jsonString);
+        console.log(result)
+        return result.HashData;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
+}
+
+async function getPlanilhasByLote(contract,lote) {
+    try {
+        const rawResult = await contract.evaluateTransaction("GetPlanilhasByLote", lote);
+        
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
+        }
+         
+        const result = JSON.parse(jsonString);
+        console.log(result)
+        return result;
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        return null;
+    }
 }
 
 async function editTest(contract) {
@@ -293,27 +380,6 @@ async function editTest(contract) {
     );
 
     console.log('teste atualizado com sucesso');
-}
-
-async function query(contract, testID) {
-    try {
-        console.log(`consultando teste com ID: ${testID}`);
-        const resultBytes = await contract.evaluateTransaction('QueryTest', testID);
-        console.log(resultBytes)
-        let resultString = resultBytes.toString('utf8');
-
-        if (/^\d+(,\d+)*$/.test(resultString.trim())) {
-            const byteArray = resultString.trim().split(',').map(n => parseInt(n));
-            resultString = Buffer.from(byteArray).toString('utf8');
-        }
-
-        const result = JSON.parse(resultString);
-        console.log(JSON.stringify(result, null, 2));
-        return result;
-
-    } catch (error) {
-        console.error('erro ao consultar teste', error);
-    }
 }
 
 async function storeModel(contract) {
@@ -377,15 +443,23 @@ async function main() {
         const sollytchChainContract = network.getContract("sollytch-chain");
 
         const action = (await askQuestion(
-            'acao (store_test | query_test | edit_test | storemodel | store_image | query_image): '
+            'acao (store_test | query_test | edit_test | storemodel | store_image | query_image | store_planilha | query_planilha): '
         )).trim().toLowerCase();
 
         if (action === 'store_test') {
             await invoke(sollytchChainContract);
 
         } else if (action === 'query_test') {
-            const testID = (await askQuestion('testID: ')).trim();
-            await query(sollytchChainContract, testID);
+            const whichQuery = (await askQuestion("Buscar pelo lote ou por TEST-ID? (lote | id) ")).trim();
+            if (whichQuery === "lote"){
+                const lote = await askQuestion('Insira o numero do lote: ')
+                await getTestByLote(sollytchChainContract, lote)
+            } else if (whichQuery === "id"){
+                const testID = await askQuestion('Insira o id do teste (ex TEST-00001): ')
+                await getTestByID(sollytchChainContract,testID)
+            }else{
+                console.log("opcao invalida")
+            }
 
         } else if (action === 'storemodel') {
             await storeModel(sollytchChainContract);
@@ -399,17 +473,31 @@ async function main() {
             await storeImage(sollytchImageContract,imagePath);
 
         } else if (action === 'query_image') {
-            const whichQuery = (await askQuestion("Buscar pelo kit ou por imagem individual? (kit | imagem)")).trim();
+            const whichQuery = (await askQuestion("Buscar pelo kit ou por imagem individual? (kit | imagem) ")).trim();
             if (whichQuery === "kit"){
                 const kitID = await askQuestion('Insira o id do kit: ')
                 await getImagesByKit(sollytchImageContract, kitID)
             } else if (whichQuery === "imagem"){
-                const imgID = await askQuestion('Insira o id da imagem: ')
+                const imgID = await askQuestion('Insira o hash da imagem: ')
                 await getImageByID(sollytchImageContract,imgID)
             }else{
                 console.log("opcao invalida")
             }
-        } else {
+        } else if (action === 'store_planilha'){
+            const imagePath = "./examples/testesAfericao.xlsx" 
+            await storePlanilha(sollytchChainContract,imagePath);
+        } else if (action === 'query_planilha'){
+            const whichQuery = (await askQuestion("Buscar pelo lote ou por planilha individual? (lote | planilha) ")).trim();
+            if (whichQuery === "lote"){
+                const lote = await askQuestion('Insira o numero do lote: ')
+                await getPlanilhasByLote(sollytchChainContract, lote)
+            } else if (whichQuery === "planilha"){
+                const planilhaHash = await askQuestion('Insira o hash da planilha: ')
+                await getPlanilhaByHash(sollytchChainContract,planilhaHash)
+            }else{
+                console.log("opcao invalida")
+            }
+        }else {
             console.log('acao invalida');
         }
 
