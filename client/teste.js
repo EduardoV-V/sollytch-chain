@@ -1,32 +1,18 @@
-/*
- * Copyright IBM Corp. All Rights Reserved.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 const grpc = require('@grpc/grpc-js');
 const readline = require('readline');
 const { connect, hash, signers } = require('@hyperledger/fabric-gateway');
 const crypto = require('node:crypto');
-const fs = require('fs') 
+const fsRead = require('fs');
+const fs = require('node:fs/promises');
 const path = require('node:path');
 const { TextDecoder } = require('node:util');
 
-const channelName = ('mainchannel');
-const chaincodeName = ('sollytch-chain');
-const mspId = ('org1MSP');
+let network, gateway, sollytchChainContract, sollytchImageContract, client
 
-let network, contract, client, gateway
+const channelName = 'mainchannel';
+const mspId = 'org1MSP';
 
-// Path to crypto materials.
-const cryptoPath = path.resolve(
-    __dirname,
-    '..',
-    'fabric',
-    'organizations',
-    'peerOrganizations',
-    'org1.example.com'
-);
+const cryptoPath = path.resolve(__dirname, '..','..','fabric','organizations','peerOrganizations','org1.example.com');
 
 const keyDirectoryPath = path.resolve(
     cryptoPath,
@@ -52,18 +38,8 @@ const tlsCertPath = path.resolve(
     'ca.crt'
 );
 
-
-function hashImage(path) {
-  const fileBuffer = fs.readFileSync(path);
-  const hash = crypto.createHash("sha512").update(fileBuffer).digest("hex");
-  return hash;
-}
-
-// Gateway peer endpoint.
-const peerEndpoint = ('localhost:7051');
-
-// Gateway peer SSL host name override.
-const peerHostAlias = ('peer0.org1.example.com');
+const peerEndpoint = 'localhost:7051';
+const peerHostAlias = 'peer0.org1.example.com';
 
 const utf8Decoder = new TextDecoder();
 
@@ -76,7 +52,6 @@ const controleInternoEncoder = {
 function preprocessForPrediction(testData) {
     console.log("Processando dados para predição...");
     
-    // 1. IDENTIFICAR FEATURES (igual ao Python)
     const numericFeatures = [
         'expiry_days_left', 'distance_mm', 'time_to_migrate_s', 'sample_volume_uL',
         'sample_pH', 'sample_turbidity_NTU', 'sample_temp_C', 'ambient_T_C',
@@ -88,18 +63,13 @@ function preprocessForPrediction(testData) {
     const categoricalFeatures = ['control_line_ok', 'controle_interno_result'];
     const allFeatures = [...numericFeatures, ...categoricalFeatures];
     
-    console.log(`🔧 Features selecionadas: ${allFeatures.length}`);
-    
-    // 2. CODIFICAR VARIÁVEIS CATEGÓRICAS (igual ao LabelEncoder do Python)
     const processedData = {...testData};
     
-    // Converter booleanos para inteiros
     if (typeof processedData.control_line_ok === 'boolean') {
         processedData.control_line_ok = processedData.control_line_ok ? 1 : 0;
         console.log(`Booleano convertido: control_line_ok → ${processedData.control_line_ok}`);
     }
     
-    // Codificar controle_interno_result
     if (processedData.controle_interno_result in controleInternoEncoder) {
         processedData.controle_interno_result = controleInternoEncoder[processedData.controle_interno_result];
         console.log(`Codificada 'controle_interno_result': ${testData.controle_interno_result} → ${processedData.controle_interno_result}`);
@@ -108,7 +78,6 @@ function preprocessForPrediction(testData) {
         console.log(`Valor desconhecido 'controle_interno_result': ${testData.controle_interno_result} → 0`);
     }
     
-    // 3. TRATAR VALORES NULOS (igual ao Python fillna(0))
     allFeatures.forEach(feature => {
         if (processedData[feature] === null || processedData[feature] === undefined) {
             processedData[feature] = 0;
@@ -116,12 +85,10 @@ function preprocessForPrediction(testData) {
         }
     });
     
-    // 4. TRATAR image_blur_score (null para 0)
     if (processedData.image_blur_score === null || processedData.image_blur_score === undefined) {
         processedData.image_blur_score = 0.0;
     }
     
-    // 5. CRIAR STRING CSV NO FORMATO ESPERADO
     const csvData = [
         processedData.lat,
         processedData.lon,
@@ -152,27 +119,16 @@ function preprocessForPrediction(testData) {
     return csvData;
 }
 
-main().catch((error) => {
-    console.error('******** FAILED to run the application:', error);
-    process.exitCode = 1;
-});
-
 async function newGrpcConnection() {
-    const tlsRootCert = await fs.readFileSync(tlsCertPath);
+    const tlsRootCert = await fs.readFile(tlsCertPath);
     const tlsCredentials = grpc.credentials.createSsl(tlsRootCert);
     return new grpc.Client(peerEndpoint, tlsCredentials, {
         'grpc.ssl_target_name_override': peerHostAlias,
     });
 }
 
-async function newIdentity() {
-    const certPath = await getFirstDirFileName(certDirectoryPath);
-    const credentials = await fs.readFileSync(certPath);
-    return { mspId, credentials };
-}
-
 async function getFirstDirFileName(dirPath) {
-    const files = await fs.readdirSync(dirPath);
+    const files = await fs.readdir(dirPath);
     const file = files[0];
     if (!file) {
         throw new Error(`No files in directory: ${dirPath}`);
@@ -180,162 +136,237 @@ async function getFirstDirFileName(dirPath) {
     return path.join(dirPath, file);
 }
 
+async function newIdentity() {
+    const certPath = await getFirstDirFileName(certDirectoryPath);
+    const credentials = await fs.readFile(certPath);
+    return { mspId, credentials };
+}
+
 async function newSigner() {
     const keyPath = await getFirstDirFileName(keyDirectoryPath);
-    const privateKeyPem = await fs.readFileSync(keyPath);
+    const privateKeyPem = await fs.readFile(keyPath);
     const privateKey = crypto.createPrivateKey(privateKeyPem);
     return signers.newPrivateKeySigner(privateKey);
 }
 
-async function invoke() {
-    const jsonFilePath = require('path').join(__dirname, 'test.json');
-    const testData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
+async function storeTest(jsonStr) {
+    const testData = JSON.parse(jsonStr);
     const testID = testData.test_id;
     console.log(testID)
     
-    // Pré-processar os dados
     const predictStr = preprocessForPrediction(testData);
-    
-    // String JSON original
-    const jsonStr = JSON.stringify(testData);
-
     try {
-        await contract.submitTransaction("StoreTest", testID, jsonStr, predictStr);
-        console.log("Teste armazenado com sucesso");
-    } catch (error) {
-        console.error("Erro:", error);
+        await sollytchChainContract.submitTransaction(
+            "StoreTest",
+            testID,
+            jsonStr,
+            predictStr
+        );
+        console.log(`Teste ${testID} armazenado com sucesso`)
+    } catch (err) {
+        console.error(`Falha ao armazenar teste ${testID}: ${err}`)
     }
 }
 
-async function store(imagePath, imageID) {
-    const imageHash = hashImage(imagePath)
-    await contract.submitTransaction(
-        "StoreImage",
-        imageID,
-        imageHash
-    );
-
-    console.log("Imagem armazenada com sucesso!");
+async function updateTest(jsonStr, testID) {
+    try{
+        await sollytchChainContract.submitTransaction(
+            'UpdateTest',
+            testID,
+            jsonStr
+        );
+        console.log(`teste ${testID} atualizado com sucesso`);
+    }catch(err){
+        console.error(`Falha ao atualizar teste ${testID}: ${err}`)
+    }
 }
 
-async function getImage(imageID) {
+async function storeModel(modelBase64, modelKey) {
+    try{
+        await sollytchChainContract.submitTransaction(
+            'StoreModel',
+            modelKey,
+            modelBase64
+        );
+        console.log(`Modelo ${modelKey} armazenado com sucesso`)
+    } catch(err){
+        console.error(`Erro ao armazenar modelo ${modelKey}: ${err}`)
+    }
+}
+
+async function queryTestByID(testID){
+    try{
+        const rawResult = await sollytchChainContract.evaluateTransaction(
+            'GetTestByID',
+            testID
+        );
+
+        let jsonString = ""
+        for (const byte of rawResult){
+            jsonString += String.fromCharCode(byte)
+        }
+
+        const result = JSON.parse(jsonString)
+        console.log("Resultado do query por ID do teste:")
+        console.log(result)
+        return result
+    }catch(err){
+        console.error("Erro ao buscar teste por id: ", err)
+    }
+}
+
+async function queryTestByLote(lote){
+    try{
+        const rawResult = await sollytchChainContract.evaluateTransaction(
+            'GetTestByLote',
+            lote
+        );
+
+        let jsonString = ""
+        for (const byte of rawResult){
+            jsonString += String.fromCharCode(byte)
+        }
+
+        const result = JSON.parse(jsonString)
+        console.log("Resultado do query por lote:")
+        console.log(result)
+        return result
+    }catch(err){
+        console.error(`Erro ao buscar pelo lote ${lote}: ${err}`)
+    }
+}
+
+async function storePlanilha(lote,planilhaHash){
+    try{
+        await sollytchChainContract.submitTransaction(
+            "StorePlanilha",
+            lote,
+            planilhaHash
+        );
+        console.log(`Planilha ${planilhaHash} armazenada com sucesso`)
+    }catch(err){
+        console.error(`Erro ao armazenar planilha ${planilhaHash}: ${err}`);
+    }
+}
+
+async function getPlanilhaByHash(planilhaHash){
     try {
-        const rawResult = await contract.evaluateTransaction("GetImage", imageID);
+        const rawResult = await contract.evaluateTransaction(
+            "GetPlanilhaByHash",
+            planilhaHash
+        );
         
         let jsonString = "";
         for (const byte of rawResult) {
             jsonString += String.fromCharCode(byte);
         }
         
-        console.log("JSON recebido:", jsonString.substring(0, 100) + "...");
-        
-        // Parse
         const result = JSON.parse(jsonString);
-        return result.HashData;
-        
-    } catch (error) {
-        console.error("Erro:", error);
-        return null;
-    }
+        console.log("Resultado do query da planilha por hash:")
+        console.log(result)
+        return result
+    } catch (err){
+        console.error("Erro: ", err);
+    }   
 }
 
-async function query(testID) {
+async function getPlanilhaByLote(lote){
     try {
-        console.log(`consultando teste com ID: ${testID}`);
+        const rawResult = await contract.evaluateTransaction(
+            "GetPlanilhasByLote",
+            lote
+        );
         
-        const resultBytes = await contract.evaluateTransaction("QueryTest", testID);
-        let resultString = resultBytes.toString('utf8');
-
-        // Caso o retorno venha como "123,34,..." (lista de bytes)
-        if (/^\d+(,\d+)*$/.test(resultString.trim())) {
-            // Converte string de números em array de bytes
-            const byteArray = resultString.trim().split(',').map(n => parseInt(n));
-            resultString = Buffer.from(byteArray).toString('utf8');
+        let jsonString = "";
+        for (const byte of rawResult) {
+            jsonString += String.fromCharCode(byte);
         }
+        
+        const result = JSON.parse(jsonString);
+        console.log("Resultado do query da planilha por lote:")
+        console.log(result)
+        return result
+    } catch (err){
+        console.error("Erro:", err)
+    }   
+}
 
-        const result = JSON.parse(resultString);
-        console.log(JSON.stringify(result, null, 2));
-
-        return result;
-    } catch (error) {
-        console.error("erro ao consultar teste", error);
+async function storeImage(imageHash, imageID) {
+    try{
+        await sollytchImageContract.submitTransaction(
+            "StoreImage",
+            imageID,
+            imageHash
+        );
+        console.log("Imagem armazenada com sucesso!");
+    } catch(err){
+        console.error("erro ao armazenar hash de imagem: ", err)
     }
 }
 
-function askQuestion(query) {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-    return new Promise(resolve => rl.question(query, ans => {
-        rl.close();
-        resolve(ans);
-    }));
+async function queryImage(imageID) {
+  try {
+    const rawResult =
+      await sollytchImageContract.evaluateTransaction(
+        "GetImage",
+        imageID
+      );
+
+    const jsonString = Buffer.from(rawResult).toString("utf8");
+
+    const result = JSON.parse(jsonString);
+
+    if (!result.hashData) {
+      throw new Error("hashData não encontrado no resultado");
+    }
+
+    return String(result.hashData);
+
+  } catch (error) {
+    console.error("Erro ao buscar hash de imagem:", error);
+    return null;
+  }
 }
 
-function displayInputParameters() {
-    console.log(`channelName:       ${channelName}`);
-    console.log(`chaincodeName:     ${chaincodeName}`);
-    console.log(`mspId:             ${mspId}`);
-    console.log(`cryptoPath:        ${cryptoPath}`);
-    console.log(`keyDirectoryPath:  ${keyDirectoryPath}`);
-    console.log(`certDirectoryPath: ${certDirectoryPath}`);
-    console.log(`tlsCertPath:       ${tlsCertPath}`);
-    console.log(`peerEndpoint:      ${peerEndpoint}`);
-    console.log(`peerHostAlias:     ${peerHostAlias}`);
+async function disconnect(){
+    try{
+        gateway.close();
+        client.close();
+    } catch(err){
+        console.error('Erro na desconexão')
+    }
 }
 
-async function main() {
-    displayInputParameters();
-
-    // The gRPC client connection should be shared by all Gateway connections to this endpoint.
+async function initialize() {
     client = await newGrpcConnection();
-    
     gateway = connect({
         client,
         identity: await newIdentity(),
         signer: await newSigner(),
         hash: hash.sha256,
-        // Default timeouts for different gRPC calls
-        evaluateOptions: () => {
-            return { deadline: Date.now() + 5000 }; // 5 seconds
-        },
-        endorseOptions: () => {
-            return { deadline: Date.now() + 15000 }; // 15 seconds
-        },
-        submitOptions: () => {
-            return { deadline: Date.now() + 5000 }; // 5 seconds
-        },
-        commitStatusOptions: () => {
-            return { deadline: Date.now() + 60000 }; // 1 minute
-        },
     });
 
-     try {
+    try {
         network = gateway.getNetwork(channelName);
-        contract = network.getContract(chaincodeName);
+        sollytchImageContract = network.getContract("sollytch-image");
+        sollytchChainContract = network.getContract("sollytch-chain");
+    } catch (err){
+        console.error("Erro na inicialização: ", err)
+    } 
+}
 
-        const action = (await askQuestion('input: ')).trim().toLowerCase();
+console.log("Resultado do contract sem nada: ", sollytchChainContract)
+await initialize()
+console.log(client,gateway,network)
+console.log("pos inicializacao: ", sollytchChainContract)
 
-        if (action === 'invoke') {
-            await invoke();
-        } else if (action === 'query') {
-            const testID = (await askQuestion('testID: ')).trim();
-            await query(testID);
-        } else if (action === 'store') {
-            const imageID = (await askQuestion('imageID: ')).trim();
-            const imagePath = "./img.jpg" 
-            await store(imagePath, imageID)
-        } else if (action === "get") {
-            const imageID = (await askQuestion('imageID: ')).trim();
-            const hashResponse = await getImage(imageID);
-            console.log(hashResponse)
-        } else {
-            console.log('invalido');
-        }
 
-    } finally {
-        gateway.close();
-        client.close();
-    }
+module.exports={
+    initialize,
+    disconnect,
+    storeTest,
+    storeModel,
+    updateTest,
+    storeImage,
+    queryImage
 }

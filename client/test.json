@@ -1,5 +1,5 @@
 {
-  "test_id": "TEST-00098",
+  "test_id": "TEST-00083",
   "timestamp": "2025-07-15 22:13:00",
   "lat": -22.87496,
   "lon": -43.246872,
@@ -7,7 +7,7 @@
   "operator_id": "OP04",
   "operator_did": "did:bio:OP04",
   "matrix_type": "agua",
-  "cassette_lot": "C23009",
+  "cassette_lot": "C22009",
   "reagent_lot": "R24010",
   "expiry_days_left": 42,
   "distance_mm": 24.87,
