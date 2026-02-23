@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-02-20T18:02:08.868Z",
+  "metrics": {
+    "storeTest": {
+      "transactionTimes": [
+        0.095,
+        0.008
+      ],
+      "chaincodeTimes": [],
+      "success": 0,
+      "errors": 2,
+      "details": [
+        {
+          "iteration": 1,
+          "testId": "TEST-00999",
+          "success": false,
+          "transactionTime": 0.095,
+          "error": {
+            "message": "10 ABORTED: failed to endorse transaction, see attached details for more info",
+            "details": [
+              {
+                "address": "peer0.org1.example.com:7051",
+                "message": "chaincode response 500, modelo acao_recomendada nao encontrado",
+                "mspId": "org1MSP"
+              }
+            ],
+            "code": 10
+          },
+          "timestamp": "2026-02-20T18:02:07.947Z"
+        },
+        {
+          "iteration": 2,
+          "testId": "TEST-01000",
+          "success": false,
+          "transactionTime": 0.008,
+          "error": {
+            "message": "10 ABORTED: failed to endorse transaction, see attached details for more info",
+            "details": [
+              {
+                "address": "peer0.org1.example.com:7051",
+                "message": "chaincode response 500, modelo acao_recomendada nao encontrado",
+                "mspId": "org1MSP"
+              }
+            ],
+            "code": 10
+          },
+          "timestamp": "2026-02-20T18:02:08.462Z"
+        }
+      ]
+    },
+    "updateTest": {
+      "transactionTimes": [
+        0.007
+      ],
+      "chaincodeTimes": [],
+      "success": 0,
+      "errors": 1,
+      "details": [
+        {
+          "iteration": 1,
+          "testId": "TEST-00999",
+          "success": false,
+          "transactionTime": 0.007,
+          "error": {
+            "message": "10 ABORTED: failed to endorse transaction, see attached details for more info",
+            "details": [
+              {
+                "address": "peer0.org1.example.com:7051",
+                "message": "chaincode response 500, teste TEST-00999 nao encontrado",
+                "mspId": "org1MSP"
+              }
+            ],
+            "code": 10
+          },
+          "timestamp": "2026-02-20T18:02:08.454Z"
+        }
+      ]
+    }
+  }
+}
