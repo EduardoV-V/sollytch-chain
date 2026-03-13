@@ -1,3 +1,6 @@
+# AVISO!!
+A rede está passando por mudanças relacionadas ao Fabric Certificate Authorities (mais especificamente, estou configurando um CA operante e atualizando os clientes) e por conta disso, os clientes node.js podem não funcionar. Caso for fazer algum teste, use o commit anterior.
+
 # Protótipo Hyperledger Fabric - Sollytch
 
 Este repositório é um protótipo baseado na distribuição de demonstração do hyperledger fabric cc-tools. Essa distribuição do fabric é a mesma usada pela RNP, com alguns scripts de configuração a menos, mas a funcionalidade é essencialmente a mesma. Este repositório contém o chaincode protótipo para armazenamento e busca dos dados dos testes de cassetes. Também possui uma API de busca inicial, sem uma definição pronta no momento. 

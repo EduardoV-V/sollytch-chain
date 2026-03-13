@@ -176,7 +176,7 @@ OS_ARCH=$(echo "$(uname -s|tr '[:upper:]' '[:lower:]'|sed 's/mingw64_nt.*/window
 # another container before giving up
 
 # Using crpto vs CA. default is cryptogen
-CRYPTO="cryptogen"
+CRYPTO="Certificate Authorities"
 
 CLI_TIMEOUT=10
 #default for delay

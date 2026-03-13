@@ -88,4 +88,4 @@ else
 fi 
 
 docker network create cc-tools-demo-net
-./network.sh up createChannel -n $ORG_QNTY $CCAAS_TLS_ENABLED
+./network.sh up createChannel -n $ORG_QNTY $CCAAS_TLS_ENABLED -ca
