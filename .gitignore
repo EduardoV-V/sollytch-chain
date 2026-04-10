@@ -14,6 +14,7 @@ cc-tools-demo.tar.gz
 package-lock.json
 client/uploads/
 client/benchmarks/*
+client/wallet
 
 # Go dependencies - NUNCA versionar vendor
 vendor/
