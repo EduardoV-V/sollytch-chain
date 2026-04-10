@@ -1,33 +1,35 @@
+'use strict';
+
+const express    = require('express');
 const bodyParser = require('body-parser');
-const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const fsRead = require('fs');
-const multer = require('multer');
-const crypto = require('crypto');
+const cors       = require('cors');
+const path       = require('path');
+const crypto     = require('crypto');
+const multer     = require('multer');
+const jwt        = require('jsonwebtoken');
 
 const upload = multer({ dest: 'uploads/' });
 
+// Modulos da rede Fabric
+const register = require('./resources/register.js');
+const { generateChallenge, verifySignature, activeChallenges } = require('./resources/verify.js');
+const normalizeS = require('./resources/normalization.js');
 const {
   initialize,
-  disconnect,
-  storeTest,
-  queryTestByID,
-  queryTestByLote,
-  storeModel,
-  updateTest,
-  storeImage,
-  queryImageByHash,
-  queryImageByKit,
-  storePlanilha,
-  queryPlanilhaByHash,
-  queryPlanilhaByLote
-} = require('./resources/standalone_client.js');
+  createProposal,
+  createTransaction,
+  createCommit,
+  finalize,
+  close
+} = require('./resources/invoke.js');
 
-const app = express();
-const port = 3000;
+const app  = express();
+const PORT = 3000;
 
-// middleware
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -36,402 +38,246 @@ app.use(bodyParser.json());
 app.use('/resources', express.static(path.join(__dirname, 'resources')));
 app.use(express.static(path.join(__dirname, 'views')));
 
-// Helper function para gerenciar conexão com Fabric
-async function withFabric(operation) {
+// ---------------------------------------------------------------------------
+// JWT
+// ---------------------------------------------------------------------------
+
+const JWT_SECRET = process.env.JWT_SECRET || 'sollytch-dev-secret';
+
+// Valida o token Bearer e injeta req.user
+function authRequired(req, res, next) {
+  const header = req.headers['authorization'] || '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
+
+  if (!token) return res.status(401).json({ error: 'Token ausente' });
+
   try {
-    await initialize();
-    const result = await operation();
-    await disconnect();
-    return result;
-  } catch (err) {
-    await disconnect();
-    throw err;
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Token invalido ou expirado' });
   }
 }
 
-// Rota inicial
+// ---------------------------------------------------------------------------
+// Sessoes de transacao em andamento
+// Mapeia txId -> { createdAt }
+// O estado de bytes (proposalBytes, transactionBytes, etc.) fica em invoke.js
+// ---------------------------------------------------------------------------
+
+const txSessions = new Map();
+
+// Expira sessoes com mais de 10 minutos
+setInterval(() => {
+  const limite = Date.now() - 10 * 60 * 1000;
+  for (const [id, session] of txSessions) {
+    if (session.createdAt < limite) txSessions.delete(id);
+  }
+}, 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Paginas
+// ---------------------------------------------------------------------------
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// ============= ROTAS DE STORE/ARMAZENAMENTO =============
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+});
 
-// Grupo: Store Test
-app.post('/store/test', async (req, res) => {
-  let { testID, data } = req.body;
-  console.log("Recebendo dados para store/test:", testID, data);
+app.get('/register', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'register.html'));
+});
+
+// ---------------------------------------------------------------------------
+// AUTENTICACAO
+// ---------------------------------------------------------------------------
+
+// Registra usuario na wallet Fabric via CSR
+// Espera: { username: string, csr: string (PEM) }
+app.post('/auth/register', async (req, res) => {
+  const { username, csr } = req.body;
+
+  if (!username || !csr) {
+    return res.status(400).json({ error: 'username e csr sao obrigatorios' });
+  }
 
   try {
-    if (!Array.isArray(data)) data = [data];
+    await register(username, csr);
+    res.json({ message: `Usuario ${username} registrado com sucesso` });
+  } catch (err) {
+    console.error('Erro no registro:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const results = [];
+// Passo 1 do login: gera nonce e devolve ao frontend para assinar
+// Espera: { username: string }
+app.post('/auth/challenge', (req, res) => {
+  const { username } = req.body;
 
-    await withFabric(async () => {
-      for (let i = 0; i < data.length; i++) {
-        const item = data[i];
+  if (!username) return res.status(400).json({ error: 'username e obrigatorio' });
 
-        const id =
-          item.test_id ||
-          item.testID ||
-          item.TestID ||
-          testID;
+  const challenge = generateChallenge();
+  activeChallenges.set(username, challenge);
 
-        if (!id) {
-          throw new Error(`TestID ausente no item ${i}`);
-        }
+  res.json({ nonce: challenge.nonce });
+});
 
-        item.test_id = id;
-        await storeTest(JSON.stringify(item));
+// Passo 2 do login: verifica assinatura do nonce e emite JWT
+// Espera: { username: string, signature: number[] (bytes da assinatura DER) }
+app.post('/auth/login', async (req, res) => {
+  const { username, signature } = req.body;
 
-        results.push({ index: i, testID: id, status: "ok" });
+  if (!username || !signature) {
+    return res.status(400).json({ error: 'username e signature sao obrigatorios' });
+  }
+
+  try {
+    const sigBuffer = Buffer.from(signature);
+    const { token } = await verifySignature(username, sigBuffer);
+    res.json({ token });
+  } catch (err) {
+    console.error('Erro no login:', err);
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// TRANSACOES COM ASSINATURA OFFLINE
+//
+// Fluxo ping-pong via endpoint unico. Cada requisicao avanca um passo:
+//
+//   Frontend                          Backend
+//   --------                          -------
+//   { action:'init', chaincode, fcn, args }
+//                                  -> inicializa gateway, cria proposta
+//   <- { txId, step:'proposal', proposalDigest }
+//
+//   { txId, step:'proposal', signature }
+//                                  -> normaliza sig, cria transacao
+//   <- { txId, step:'transaction', transactionDigest }
+//
+//   { txId, step:'transaction', signature }
+//                                  -> normaliza sig, cria commit
+//   <- { txId, step:'commit', commitDigest }
+//
+//   { txId, step:'commit', signature }
+//                                  -> normaliza sig, finaliza
+//   <- { txId, step:'done', ok:true, result }
+//
+// A normalizacao converte a assinatura RAW 64 bytes (R||S) gerada pelo
+// Web Crypto API para DER canonico (S normalizado) exigido pelo Fabric Gateway.
+//
+// /invoke e /query sao aliases de /transaction mantidos para compatibilidade
+// com o frontend de referencia (chaincode.html).
+// ---------------------------------------------------------------------------
+
+async function handleTransaction(req, res) {
+  const { action, step, txId, chaincode, fcn, args, signature } = req.body;
+  const username = req.user.sub;
+
+  try {
+
+    // --- INIT: recebe parametros do chaincode e cria a proposta ---
+    if (action === 'init') {
+      if (!chaincode || !fcn || !args) {
+        return res.status(400).json({ error: 'chaincode, fcn e args sao obrigatorios' });
       }
-    });
 
-    res.json({
-      message: "Testes armazenados com sucesso",
-      total: results.length,
-      detalhes: results
-    });
+      initialize(username, chaincode);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+      const proposalDigest = await createProposal(fcn, ...args);
+      const newTxId = crypto.randomUUID();
+      txSessions.set(newTxId, { createdAt: Date.now() });
 
-// Grupo: Store Image
-app.post('/store/image', upload.single('image'), async (req, res) => {
-  const { kitID } = req.body;
-  const filePath = req.file?.path;
-
-  if (!kitID) {
-    return res.status(400).json({ error: "kitID é obrigatório" });
-  }
-
-  if (!filePath) {
-    return res.status(400).json({ error: "Imagem não enviada" });
-  }
-
-  try {
-    const buffer = fsRead.readFileSync(filePath);
-    const hash = crypto
-      .createHash("sha512")
-      .update(buffer)
-      .digest("hex");
-
-    await withFabric(() => storeImage(hash, kitID));
-
-    res.json({
-      message: "Imagem armazenada com sucesso",
-      kitID,
-      imageHash: hash
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  } finally {
-    // Limpar arquivo temporário
-    if (filePath && fsRead.existsSync(filePath)) {
-      fsRead.unlinkSync(filePath);
+      return res.json({
+        txId:           newTxId,
+        step:           'proposal',
+        proposalDigest: proposalDigest.toString('base64')
+      });
     }
-  }
-});
 
-// Grupo: Store Model
-app.post('/store/model', upload.single('model'), async (req, res) => {
-  const { modelKey } = req.body;
-  const filePath = req.file?.path;
-
-  if (!modelKey) {
-    return res.status(400).json({ error: "modelKey é obrigatório" });
-  }
-
-  if (!filePath) {
-    return res.status(400).json({ error: "Arquivo de modelo não enviado" });
-  }
-
-  try {
-    const buffer = fsRead.readFileSync(filePath);
-    const base64 = buffer.toString('base64');
-
-    await withFabric(() => storeModel(base64, modelKey));
-
-    res.json({
-      message: "Modelo armazenado com sucesso",
-      modelKey
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  } finally {
-    // Limpar arquivo temporário
-    if (filePath && fsRead.existsSync(filePath)) {
-      fsRead.unlinkSync(filePath);
+    // --- PASSOS SUBSEQUENTES: requerem txId, step e signature ---
+    if (!txId || !step || !signature) {
+      return res.status(400).json({ error: 'txId, step e signature sao obrigatorios' });
     }
-  }
-});
 
-// Grupo: Store Planilha
-app.post('/store/planilha', async (req, res) => {
-  const { lote, planilhaHash } = req.body;
-
-  if (!lote || !planilhaHash) {
-    return res.status(400).json({ 
-      error: "lote e planilhaHash são obrigatórios" 
-    });
-  }
-
-  try {
-    await withFabric(() => storePlanilha(lote, planilhaHash));
-
-    res.json({
-      message: "Planilha armazenada com sucesso",
-      lote,
-      planilhaHash
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============= ROTAS DE QUERY/CONSULTA =============
-
-// Grupo: Query Test - por ID
-app.get('/query/test/id/:testID', async (req, res) => {
-  const { testID } = req.params;
-
-  if (!testID) {
-    return res.status(400).json({ error: "testID é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryTestByID(testID));
-    
-    if (!result) {
-      return res.status(404).json({ error: "Teste não encontrado" });
+    if (!txSessions.has(txId)) {
+      return res.status(400).json({ error: 'Sessao nao encontrada ou expirada' });
     }
-    
-    res.json(result);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+    // Normaliza assinatura RAW 64 bytes (R||S) para DER canonico
+    const sigDER = normalizeS(Buffer.from(signature));
 
-// Grupo: Query Test - por Lote
-app.get('/query/test/lote/:lote', async (req, res) => {
-  const { lote } = req.params;
+    // --- PROPOSAL: cria transacao a partir da proposta assinada ---
+    if (step === 'proposal') {
+      const transactionDigest = await createTransaction(sigDER);
 
-  if (!lote) {
-    return res.status(400).json({ error: "lote é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryTestByLote(lote));
-    
-    if (!result) {
-      return res.status(404).json({ error: "Lote não encontrado" });
+      return res.json({
+        txId,
+        step:              'transaction',
+        transactionDigest: transactionDigest.toString('base64')
+      });
     }
-    
-    res.json(result);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+    // --- TRANSACTION: cria commit a partir da transacao assinada ---
+    if (step === 'transaction') {
+      const commitDigest = await createCommit(sigDER);
 
-// Grupo: Query Image - por Hash
-app.get('/query/image/hash/:imageHash', async (req, res) => {
-  const { imageHash } = req.params;
-
-  if (!imageHash) {
-    return res.status(400).json({ error: "imageHash é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryImageByHash(imageHash));
-    
-    if (!result) {
-      return res.status(404).json({ error: "Imagem não encontrada" });
+      return res.json({
+        txId,
+        step:         'commit',
+        commitDigest: commitDigest.toString('base64')
+      });
     }
-    
-    res.json(result);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+    // --- COMMIT: finaliza submetendo o commit assinado ---
+    if (step === 'commit') {
+      const result = await finalize(sigDER);
 
-// Grupo: Query Image - por Kit ID (Nota: função queryImageByKit requer parâmetro)
-app.get('/query/image/kit/:kitID', async (req, res) => {
-  const { kitID } = req.params;
+      txSessions.delete(txId);
+      close();
 
-  if (!kitID) {
-    return res.status(400).json({ error: "kitID é obrigatório" });
-  }
-
-  try {
-    // Nota: Você precisa ajustar a função queryImageByKit para receber kitID como parâmetro
-    const result = await withFabric(() => queryImageByKit(kitID));
-    
-    if (!result) {
-      return res.status(404).json({ error: "Imagem não encontrada para este kit" });
+      return res.json({
+        txId,
+        step:   'done',
+        ok:     true,
+        result: result ?? null
+      });
     }
-    
-    res.json(result);
+
+    return res.status(400).json({ error: `Step desconhecido: ${step}` });
 
   } catch (err) {
-    console.error(err);
+    console.error('Erro na transacao:', err);
+    txSessions.delete(txId);
+    try { close(); } catch {}
     res.status(500).json({ error: err.message });
   }
+}
+
+// Rota principal de transacao
+app.post('/transaction', authRequired, handleTransaction);
+
+// Aliases mantidos para compatibilidade com o frontend de referencia
+app.post('/invoke', authRequired, handleTransaction);
+app.post('/query',  authRequired, handleTransaction);
+
+// ---------------------------------------------------------------------------
+// HEALTH CHECK
+// ---------------------------------------------------------------------------
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Grupo: Query Planilha - por Hash
-app.get('/query/planilha/hash/:planilhaHash', async (req, res) => {
-  const { planilhaHash } = req.params;
+// ---------------------------------------------------------------------------
+// Inicializacao
+// ---------------------------------------------------------------------------
 
-  if (!planilhaHash) {
-    return res.status(400).json({ error: "planilhaHash é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryPlanilhaByHash(planilhaHash));
-    
-    if (!result) {
-      return res.status(404).json({ error: "Planilha não encontrada" });
-    }
-    
-    res.json(result);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Grupo: Query Planilha - por Lote
-app.get('/query/planilha/lote/:lote', async (req, res) => {
-  const { lote } = req.params;
-
-  if (!lote) {
-    return res.status(400).json({ error: "lote é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryPlanilhaByLote(lote));
-    
-    if (!result) {
-      return res.status(404).json({ error: "Planilhas não encontradas para este lote" });
-    }
-    
-    res.json(result);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============= ROTAS DE UPDATE/ATUALIZAÇÃO =============
-
-// Grupo: Update Test
-app.put('/update/test', async (req, res) => {
-  const { testID, data } = req.body;
-
-  if (!testID || !data) {
-    return res.status(400).json({
-      error: "testID e data são obrigatórios"
-    });
-  }
-
-  try {
-    await withFabric(() => updateTest(JSON.stringify(data), testID));
-
-    res.json({
-      message: "Teste atualizado com sucesso",
-      testID
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============= ROTAS ADICIONAIS (Legacy/Compatibilidade) =============
-
-// Rota POST para query/test (mantida para compatibilidade)
-app.post('/query/test', async (req, res) => {
-  const { testID } = req.body;
-
-  if (!testID) {
-    return res.status(400).json({ error: "testID é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryTestByID(testID));
-
-    res.json(result);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Rota POST para query/image (mantida para compatibilidade)
-app.post('/query/image', async (req, res) => {
-  const { imageHash } = req.body;
-
-  if (!imageHash) {
-    return res.status(400).json({ error: "imageHash é obrigatório" });
-  }
-
-  try {
-    const result = await withFabric(() => queryImageByHash(imageHash));
-
-    res.json(result);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============= ROTA DE HEALTH CHECK =============
-
-app.get('/health', async (req, res) => {
-  try {
-    await withFabric(async () => {
-      // Apenas inicializa e desconecta para testar conexão
-      console.log("Conexão com Fabric testada com sucesso");
-    });
-    
-    res.json({
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      services: {
-        fabric: "connected",
-        server: "running"
-      }
-    });
-  } catch (err) {
-    res.status(500).json({
-      status: "unhealthy",
-      error: err.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Inicialização do servidor
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
+app.listen(PORT, () => {
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
 });

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Sollytch</title>
+  <style>
+    :root {
+      --primary: #1e7a35;
+      --primary-dark: #145427;
+      --bg: #f4fbf6;
+      --card: #ffffff;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .form-container {
+      background: var(--card);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .form-container h1 {
+      margin-bottom: 20px;
+      font-size: 24px;
+      color: var(--primary-dark);
+    }
+    .form-group {
+      margin-bottom: 15px;
+      text-align: left;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .form-group input {
+      width: 94%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    .button-group {
+      display: flex;
+      justify-content: center;
+    }
+    .button-group button {
+      padding: 10px 20px;
+      border: none;
+      background-color: var(--primary);
+      color: white;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .button-group button:hover { background-color: var(--primary-dark); }
+    .links {
+      margin-top: 15px;
+      font-size: 0.9rem;
+    }
+    .links a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="form-container">
+  <h1>Login de Usuario</h1>
+
+  <div class="form-group">
+    <label for="user">Nome de Usuario:</label>
+    <input type="text" id="user" name="user" placeholder="Digite seu nome de usuario" required>
+
+    <label for="privateKey" style="margin-top:10px">Chave Privada</label>
+    <input type="file" id="privateKey" accept=".pem">
+  </div>
+
+  <div class="button-group">
+    <button id="loginBtn">Login</button>
+  </div>
+
+  <div class="links">
+    <p>Nao possui registro? <a href="/register">Registre-se</a></p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsrsasign@10.5.25/lib/jsrsasign-all-min.js"></script>
+<script>
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const userInput       = document.getElementById('user');
+    const privateKeyInput = document.getElementById('privateKey');
+    const loginBtn        = document.getElementById('loginBtn');
+
+    loginBtn.addEventListener('click', async () => {
+      const username       = userInput.value.trim();
+      const privateKeyFile = privateKeyInput.files[0];
+
+      if (!username || !privateKeyFile) {
+        alert('Por favor, preencha todos os campos');
+        return;
+      }
+
+      try {
+        // 1. Solicitar o nonce ao servidor
+        const challengeResponse = await fetch('/auth/challenge', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ username })
+        });
+
+        const challengeData = await challengeResponse.json();
+
+        if (!challengeResponse.ok) {
+          throw new Error(challengeData.error || 'Nao foi possivel obter o desafio');
+        }
+
+        const serverNonce = challengeData.nonce;
+
+        // 2. Ler a chave privada do usuario
+        const privateKeyPEM = await readFileAsText(privateKeyFile);
+
+        // 3. Validar formato da chave
+        if (!privateKeyPEM.includes('-----BEGIN PRIVATE KEY-----') &&
+            !privateKeyPEM.includes('-----BEGIN EC PRIVATE KEY-----')) {
+          throw new Error('Formato invalido. Use chave EC no formato PEM.');
+        }
+
+        // 4. Carregar chave via jsrsasign
+        const keyObj = KEYUTIL.getKey(privateKeyPEM);
+        if (keyObj.type !== 'EC' || keyObj.curveName !== 'secp256r1') {
+          throw new Error('A chave deve ser EC prime256v1 (secp256r1)');
+        }
+
+        // 5. Assinar o nonce com SHA256withECDSA
+        // updateString assina a string hex do nonce diretamente,
+        // o que corresponde ao Buffer.from(nonce) que o verify.js usa no backend
+        const sig = new KJUR.crypto.Signature({ alg: 'SHA256withECDSA' });
+        sig.init(keyObj);
+        sig.updateString(serverNonce);
+        const signatureHex = sig.sign(); // produce DER em hex
+
+        // 6. Converter assinatura DER hex para array de bytes e enviar ao backend
+        const signatureBytes = signatureHex.match(/.{2}/g).map(b => parseInt(b, 16));
+
+        const response = await fetch('/auth/login', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ username, signature: signatureBytes })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.token) {
+          localStorage.setItem('token', result.token);
+          alert('Autenticacao bem-sucedida!');
+          window.location.href = '/';
+        } else {
+          throw new Error(result.error || 'Falha na autenticacao');
+        }
+
+      } catch (error) {
+        console.error('Erro no login:', error);
+        alert('Erro: ' + error.message);
+      }
+    });
+  });
+</script>
+</body>
+</html>
