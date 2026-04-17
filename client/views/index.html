@@ -184,6 +184,36 @@
     }
     hr { border: none; border-top: 1px solid #ddd; margin: 16px 0; }
     #userInfo { font-size: 0.9rem; color: #444; margin-bottom: 10px; }
+
+    /* Modo de assinatura */
+    .sign-mode-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f0f9f2;
+      border: 1px solid #c8e6c9;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+    }
+    .sign-mode-bar input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+    .sign-mode-bar label {
+      font-weight: bold;
+      color: var(--primary-dark);
+      cursor: pointer;
+      margin: 0;
+    }
+    .sign-mode-bar .sign-mode-hint {
+      color: #666;
+      font-size: 0.82rem;
+      margin-left: 4px;
+    }
   </style>
 </head>
 <body>
@@ -203,7 +233,15 @@
 
   <hr>
 
-  <div class="form-group">
+  <!-- Toggle de modo de assinatura -->
+  <div class="sign-mode-bar">
+    <input type="checkbox" id="useOwnKey" checked onchange="onSignModeChange()">
+    <label for="useOwnKey">Assinar com chave própria</label>
+    <span class="sign-mode-hint" id="signModeHint">(requer chave privada do usuário)</span>
+  </div>
+
+  <!-- Campo de chave privada — visível apenas no modo assinado -->
+  <div class="form-group" id="privateKeyGroup">
     <label for="privateKeyFile">Chave privada (.pem)</label>
     <input type="file" id="privateKeyFile" accept=".pem">
   </div>
@@ -422,6 +460,26 @@
   const CC_IMAGE = 'sollytch-image';
 
   // ---------------------------------------------------------------------------
+  // Modo de assinatura
+  // ---------------------------------------------------------------------------
+
+  function useOwnKey() {
+    return document.getElementById('useOwnKey').checked;
+  }
+
+  window.onSignModeChange = function () {
+    const group = document.getElementById('privateKeyGroup');
+    const hint  = document.getElementById('signModeHint');
+    if (useOwnKey()) {
+      group.classList.remove('hidden');
+      hint.textContent = '(requer chave privada do usuário)';
+    } else {
+      group.classList.add('hidden');
+      hint.textContent = '(usa credenciais do servidor)';
+    }
+  };
+
+  // ---------------------------------------------------------------------------
   // Auth
   // ---------------------------------------------------------------------------
 
@@ -446,7 +504,7 @@
     if (!token) { window.location.href = '/login'; return; }
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      document.getElementById('userInfo').innerHTML = `Logado como: <b>${payload.sub}</b>`;
+      document.getElementById('userInfo').innerHTML = `Logado como: <b>${payload.username}</b>`;
     } catch {}
   })();
 
@@ -499,22 +557,38 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Fluxo de transacao com assinatura offline (endpoint unico /transaction)
+  // executeTransaction — ponto central de despacho
   //
-  //   1. POST { action:'init', chaincode, fcn, args }
-  //      <- { txId, step:'proposal', proposalDigest }
-  //   2. assina proposalDigest
-  //      POST { txId, step:'proposal', signature }
-  //      <- { txId, step:'transaction', transactionDigest }
-  //   3. assina transactionDigest
-  //      POST { txId, step:'transaction', signature }
-  //      <- { txId, step:'commit', commitDigest }
-  //   4. assina commitDigest
-  //      POST { txId, step:'commit', signature }
-  //      <- { txId, step:'done', ok:true, result }
+  // Se "Assinar com chave própria" estiver MARCADO:
+  //   usa o fluxo de 4 passos com assinatura via /transaction (comportamento original)
+  //
+  // Se estiver DESMARCADO:
+  //   faz um POST simples em /transaction-standalone com { chaincode, fcn, args }
+  //   e retorna a resposta diretamente
   // ---------------------------------------------------------------------------
 
   async function executeTransaction(chaincode, fcn, ...args) {
+    if (useOwnKey()) {
+      return executeTransactionSigned(chaincode, fcn, ...args);
+    } else {
+      return executeTransactionStandalone(chaincode, fcn, ...args);
+    }
+  }
+
+  // Fluxo standalone: uma chamada REST simples, sem chave do usuario
+  async function executeTransactionStandalone(chaincode, fcn, ...args) {
+    const res  = await fetch('/transaction-standalone', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ chaincode, fcn, args })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro na transacao standalone');
+    return data;
+  }
+
+  // Fluxo assinado: 4 passos com JWT + chave privada (comportamento original)
+  async function executeTransactionSigned(chaincode, fcn, ...args) {
     if (!checkAuth()) throw new Error('Nao autenticado');
 
     const token   = getToken();
@@ -524,7 +598,7 @@
       'Authorization': `Bearer ${token}`
     };
 
-    // Passo 1: inicia e recebe digest da proposta
+    // Passo 1
     let res = await fetch('/transaction', {
       method: 'POST', headers,
       body: JSON.stringify({ action: 'init', chaincode, fcn, args })
@@ -538,7 +612,7 @@
     const { txId } = data;
     let { step } = data;
 
-    // Passo 2: assina proposta
+    // Passo 2
     let digest    = base64ToUint8Array(data.proposalDigest);
     let signature = await signDigest(digest, pem);
     res  = await fetch('/transaction', { method: 'POST', headers, body: JSON.stringify({ txId, step, signature: Array.from(signature) }) });
@@ -546,7 +620,7 @@
     if (!res.ok) throw new Error(data.error || 'Erro na etapa de proposta');
     step = data.step;
 
-    // Passo 3: assina transacao
+    // Passo 3
     digest    = base64ToUint8Array(data.transactionDigest);
     signature = await signDigest(digest, pem);
     res  = await fetch('/transaction', { method: 'POST', headers, body: JSON.stringify({ txId, step, signature: Array.from(signature) }) });
@@ -554,7 +628,7 @@
     if (!res.ok) throw new Error(data.error || 'Erro na etapa de transacao');
     step = data.step;
 
-    // Passo 4: assina commit
+    // Passo 4
     digest    = base64ToUint8Array(data.commitDigest);
     signature = await signDigest(digest, pem);
     res  = await fetch('/transaction', { method: 'POST', headers, body: JSON.stringify({ txId, step, signature: Array.from(signature) }) });
@@ -565,10 +639,9 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Wrappers de chaincode (mapeiam funcoes do chaincode para executeTransaction)
+  // Wrappers de chaincode
   // ---------------------------------------------------------------------------
 
-  // -- Store --
   async function storeTest(testID, jsonStr, predictStr) {
     return executeTransaction(CC_MAIN, 'StoreTest', testID, jsonStr, predictStr);
   }
@@ -581,8 +654,6 @@
   async function storePlanilha(lote, hash) {
     return executeTransaction(CC_MAIN, 'StorePlanilha', lote, hash);
   }
-
-  // -- Query --
   async function queryTestByID(testID) {
     return executeTransaction(CC_MAIN, 'GetTestByID', testID);
   }
@@ -601,8 +672,6 @@
   async function queryPlanilhaByLote(lote) {
     return executeTransaction(CC_MAIN, 'GetPlanilhasByLote', lote);
   }
-
-  // -- Update --
   async function updateTest(testID, jsonStr) {
     return executeTransaction(CC_MAIN, 'UpdateTest', testID, jsonStr);
   }
@@ -619,7 +688,6 @@
     void box.offsetWidth;
     box.classList.add('highlight');
 
-    // Mostra botao de copiar apenas na aba query
     const copyGroup = document.getElementById('queryCopyGroup');
     if (copyGroup) copyGroup.style.display = elementId === 'queryResult' ? 'flex' : 'none';
   }
@@ -649,13 +717,10 @@
     }
   }
 
-  function btnOf(id) { return document.getElementById(id); }
-
   // ---------------------------------------------------------------------------
   // Handlers de storage
   // ---------------------------------------------------------------------------
 
-  // Armazenar Teste (JSON individual com preprocessamento)
   window.handleStoreTest = async function () {
     const id   = document.getElementById('storeTestId').value.trim();
     const file = document.getElementById('storeTestFile').files[0];
@@ -678,7 +743,6 @@
     }
   };
 
-  // Armazenar Imagem (calcula hash SHA-512 no frontend antes de enviar)
   window.handleStoreImage = async function () {
     const kitID = document.getElementById('storeImageKitId').value.trim();
     const file  = document.getElementById('storeImageFile').files[0];
@@ -687,7 +751,6 @@
 
     setLoading(true);
     try {
-      // Calcula o hash SHA-512 da imagem no frontend
       const arrayBuffer = await file.arrayBuffer();
       const hashBuffer  = await crypto.subtle.digest('SHA-512', arrayBuffer);
       const imageHash   = Array.from(new Uint8Array(hashBuffer))
@@ -703,7 +766,6 @@
     }
   };
 
-  // Armazenar Modelo (converte para base64 e envia via chaincode)
   window.handleStoreModel = async function () {
     const modelKey = document.getElementById('modelKey').value;
     const file     = document.getElementById('storeModelFile').files[0];
@@ -723,7 +785,6 @@
     }
   };
 
-  // Armazenar Planilha XLSX em lote (le linhas e chama StoreTest para cada uma)
   window.handleStorePlanilha = async function () {
     const file = document.getElementById('storePlanilhaFile').files[0];
     if (!file) { alert('Selecione o arquivo XLSX.'); return; }
@@ -880,7 +941,6 @@
   // Handlers de atualizacao do teste
   // ---------------------------------------------------------------------------
 
-  // Carrega o teste da blockchain e preenche o editor JSON
   window.loadTestForUpdate = async function () {
     const id = document.getElementById('updateTestId').value.trim();
     if (!id) { alert('Informe o Test ID.'); return; }
@@ -899,7 +959,6 @@
     }
   };
 
-  // Envia o JSON editado de volta ao chaincode
   window.handleUpdateTest = async function () {
     const id     = document.getElementById('updateTestId').value.trim();
     const editor = document.getElementById('updateJsonEditor').value.trim();

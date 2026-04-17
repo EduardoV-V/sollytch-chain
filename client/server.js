@@ -7,12 +7,13 @@ const path       = require('path');
 const crypto     = require('crypto');
 const multer     = require('multer');
 const jwt        = require('jsonwebtoken');
+const fsRead     = require('fs');
 
 const upload = multer({ dest: 'uploads/' });
 
 // Modulos da rede Fabric
-const register = require('./resources/register.js');
-const { generateChallenge, verifySignature, activeChallenges } = require('./resources/verify.js');
+const { registerWithSupabase } = require('./resources/register.js');
+const { getUserByUsername, verifyPassword, getCertificateByUserId } = require('./resources/supabase.js');
 const normalizeS = require('./resources/normalization.js');
 const {
   initialize,
@@ -22,6 +23,9 @@ const {
   finalize,
   close
 } = require('./resources/invoke.js');
+
+// Modulo standalone (sem autenticacao por chave do usuario)
+const standaloneClient = require('./resources/standalone_client.js');
 
 const app  = express();
 const PORT = 3000;
@@ -44,7 +48,6 @@ app.use(express.static(path.join(__dirname, 'views')));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'sollytch-dev-secret';
 
-// Valida o token Bearer e injeta req.user
 function authRequired(req, res, next) {
   const header = req.headers['authorization'] || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -61,13 +64,10 @@ function authRequired(req, res, next) {
 
 // ---------------------------------------------------------------------------
 // Sessoes de transacao em andamento
-// Mapeia txId -> { createdAt }
-// O estado de bytes (proposalBytes, transactionBytes, etc.) fica em invoke.js
 // ---------------------------------------------------------------------------
 
 const txSessions = new Map();
 
-// Expira sessoes com mais de 10 minutos
 setInterval(() => {
   const limite = Date.now() - 10 * 60 * 1000;
   for (const [id, session] of txSessions) {
@@ -95,17 +95,19 @@ app.get('/register', (req, res) => {
 // AUTENTICACAO
 // ---------------------------------------------------------------------------
 
-// Registra usuario na wallet Fabric via CSR
-// Espera: { username: string, csr: string (PEM) }
 app.post('/auth/register', async (req, res) => {
-  const { username, csr } = req.body;
+  const { username, password, privateKey } = req.body;
 
-  if (!username || !csr) {
-    return res.status(400).json({ error: 'username e csr sao obrigatorios' });
+  if (!username || !password) {
+    return res.status(400).json({ error: 'username e password sao obrigatorios' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
   }
 
   try {
-    await register(username, csr);
+    await registerWithSupabase(username, password, privateKey || null);
     res.json({ message: `Usuario ${username} registrado com sucesso` });
   } catch (err) {
     console.error('Erro no registro:', err);
@@ -113,31 +115,28 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// Passo 1 do login: gera nonce e devolve ao frontend para assinar
-// Espera: { username: string }
-app.post('/auth/challenge', (req, res) => {
-  const { username } = req.body;
-
-  if (!username) return res.status(400).json({ error: 'username e obrigatorio' });
-
-  const challenge = generateChallenge();
-  activeChallenges.set(username, challenge);
-
-  res.json({ nonce: challenge.nonce });
-});
-
-// Passo 2 do login: verifica assinatura do nonce e emite JWT
-// Espera: { username: string, signature: number[] (bytes da assinatura DER) }
 app.post('/auth/login', async (req, res) => {
-  const { username, signature } = req.body;
+  const { username, password } = req.body;
 
-  if (!username || !signature) {
-    return res.status(400).json({ error: 'username e signature sao obrigatorios' });
+  if (!username || !password) {
+    return res.status(400).json({ error: 'username e password sao obrigatorios' });
   }
 
   try {
-    const sigBuffer = Buffer.from(signature);
-    const { token } = await verifySignature(username, sigBuffer);
+    const user = await getUserByUsername(username);
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario nao encontrado' });
+    }
+
+    const valid = await verifyPassword(user, password);
+    if (!valid) {
+      return res.status(401).json({ error: 'Senha invalida' });
+    }
+
+    const token = jwt.sign({ sub: user.id, username: user.username }, JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES || '1h'
+    });
+
     res.json({ token });
   } catch (err) {
     console.error('Erro no login:', err);
@@ -146,48 +145,21 @@ app.post('/auth/login', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// TRANSACOES COM ASSINATURA OFFLINE
-//
-// Fluxo ping-pong via endpoint unico. Cada requisicao avanca um passo:
-//
-//   Frontend                          Backend
-//   --------                          -------
-//   { action:'init', chaincode, fcn, args }
-//                                  -> inicializa gateway, cria proposta
-//   <- { txId, step:'proposal', proposalDigest }
-//
-//   { txId, step:'proposal', signature }
-//                                  -> normaliza sig, cria transacao
-//   <- { txId, step:'transaction', transactionDigest }
-//
-//   { txId, step:'transaction', signature }
-//                                  -> normaliza sig, cria commit
-//   <- { txId, step:'commit', commitDigest }
-//
-//   { txId, step:'commit', signature }
-//                                  -> normaliza sig, finaliza
-//   <- { txId, step:'done', ok:true, result }
-//
-// A normalizacao converte a assinatura RAW 64 bytes (R||S) gerada pelo
-// Web Crypto API para DER canonico (S normalizado) exigido pelo Fabric Gateway.
-//
-// /invoke e /query sao aliases de /transaction mantidos para compatibilidade
-// com o frontend de referencia (chaincode.html).
+// TRANSACOES COM ASSINATURA OFFLINE (fluxo original com chave do usuario)
 // ---------------------------------------------------------------------------
 
 async function handleTransaction(req, res) {
   const { action, step, txId, chaincode, fcn, args, signature } = req.body;
-  const username = req.user.sub;
+  const userId = req.user.sub;
 
   try {
-
-    // --- INIT: recebe parametros do chaincode e cria a proposta ---
     if (action === 'init') {
       if (!chaincode || !fcn || !args) {
         return res.status(400).json({ error: 'chaincode, fcn e args sao obrigatorios' });
       }
 
-      initialize(username, chaincode);
+      const certificate = await getCertificateByUserId(userId);
+      initialize(userId, chaincode, certificate);
 
       const proposalDigest = await createProposal(fcn, ...args);
       const newTxId = crypto.randomUUID();
@@ -200,7 +172,6 @@ async function handleTransaction(req, res) {
       });
     }
 
-    // --- PASSOS SUBSEQUENTES: requerem txId, step e signature ---
     if (!txId || !step || !signature) {
       return res.status(400).json({ error: 'txId, step e signature sao obrigatorios' });
     }
@@ -209,13 +180,10 @@ async function handleTransaction(req, res) {
       return res.status(400).json({ error: 'Sessao nao encontrada ou expirada' });
     }
 
-    // Normaliza assinatura RAW 64 bytes (R||S) para DER canonico
     const sigDER = normalizeS(Buffer.from(signature));
 
-    // --- PROPOSAL: cria transacao a partir da proposta assinada ---
     if (step === 'proposal') {
       const transactionDigest = await createTransaction(sigDER);
-
       return res.json({
         txId,
         step:              'transaction',
@@ -223,10 +191,8 @@ async function handleTransaction(req, res) {
       });
     }
 
-    // --- TRANSACTION: cria commit a partir da transacao assinada ---
     if (step === 'transaction') {
       const commitDigest = await createCommit(sigDER);
-
       return res.json({
         txId,
         step:         'commit',
@@ -234,19 +200,11 @@ async function handleTransaction(req, res) {
       });
     }
 
-    // --- COMMIT: finaliza submetendo o commit assinado ---
     if (step === 'commit') {
       const result = await finalize(sigDER);
-
       txSessions.delete(txId);
       close();
-
-      return res.json({
-        txId,
-        step:   'done',
-        ok:     true,
-        result: result ?? null
-      });
+      return res.json({ txId, step: 'done', ok: true, result: result ?? null });
     }
 
     return res.status(400).json({ error: `Step desconhecido: ${step}` });
@@ -259,12 +217,65 @@ async function handleTransaction(req, res) {
   }
 }
 
-// Rota principal de transacao
 app.post('/transaction', authRequired, handleTransaction);
+app.post('/invoke',      authRequired, handleTransaction);
+app.post('/query',       authRequired, handleTransaction);
 
-// Aliases mantidos para compatibilidade com o frontend de referencia
-app.post('/invoke', authRequired, handleTransaction);
-app.post('/query',  authRequired, handleTransaction);
+// ---------------------------------------------------------------------------
+// TRANSACOES STANDALONE (fluxo sem chave do usuario, usa credenciais do peer)
+//
+// Endpoint unico: POST /transaction-standalone
+// Body: { chaincode: string, fcn: string, args: string[] }
+// Retorna: { ok: true, result: any }
+//
+// O mapeamento de funcoes do chaincode para metodos do standalone_client
+// e feito pelo map abaixo. Para adicionar novas funcoes, basta incluir
+// uma entrada: 'NomeFuncaoChaincode' -> (client, args) => client.metodo(...args)
+// ---------------------------------------------------------------------------
+
+const STANDALONE_FN_MAP = {
+  // sollytch-chain
+  // StoreTest args: [testID, jsonStr, predictStr] - standalone_client.storeTest(jsonStr) extrai test_id internamente
+  StoreTest:           (c, a) => c.storeTest(a[1]),
+  // UpdateTest args: [testID, jsonStr] - standalone_client.updateTest(jsonStr, testID)
+  UpdateTest:          (c, a) => c.updateTest(a[1], a[0]),
+  // StoreModel args: [modelKey, modelBase64] - standalone_client.storeModel(modelBase64, modelKey)
+  StoreModel:          (c, a) => c.storeModel(a[1], a[0]),
+  GetTestByID:         (c, a) => c.queryTestByID(a[0]),
+  GetTestsByLote:      (c, a) => c.queryTestByLote(a[0]),
+  StorePlanilha:       (c, a) => c.storePlanilha(a[0], a[1]),
+  GetPlanilhaByHash:   (c, a) => c.queryPlanilhaByHash(a[0]),
+  GetPlanilhasByLote:  (c, a) => c.queryPlanilhaByLote(a[0]),
+  // sollytch-image
+  StoreImage:          (c, a) => c.storeImage(a[1], a[0]),
+  GetImageByID:        (c, a) => c.queryImageByHash(a[0]),
+  GetImagesByKit:      (c, a) => c.queryImageByKit(a[0]),
+};
+
+app.post('/transaction-standalone', async (req, res) => {
+  const { chaincode, fcn, args } = req.body;
+
+  if (!chaincode || !fcn || !args) {
+    return res.status(400).json({ error: 'chaincode, fcn e args sao obrigatorios' });
+  }
+
+  const handler = STANDALONE_FN_MAP[fcn];
+  if (!handler) {
+    return res.status(400).json({ error: `Funcao nao mapeada para standalone: ${fcn}` });
+  }
+
+  try {
+    await standaloneClient.initialize();
+    const result = await handler(standaloneClient, args);
+    await standaloneClient.disconnect();
+
+    res.json({ ok: true, result: result ?? null });
+  } catch (err) {
+    console.error('Erro no standalone:', err);
+    try { await standaloneClient.disconnect(); } catch {}
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // HEALTH CHECK

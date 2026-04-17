@@ -50,6 +50,22 @@
       border-radius: 8px;
       font-size: 1rem;
     }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .checkbox-group input {
+      width: auto;
+    }
+    .checkbox-group label {
+      margin: 0;
+      font-weight: normal;
+    }
+    .hidden {
+      display: none;
+    }
     .button-group {
       display: flex;
       justify-content: center;
@@ -76,94 +92,116 @@
   </style>
 </head>
 <body>
-<div class="form-container">
-  <h1>Registrar Usuario</h1>
+  <div class="form-container">
+    <h1>Registrar Usuario</h1>
 
-  <div class="form-group">
-    <label for="username">Nome de Usuario</label>
-    <input type="text" id="username" placeholder="Digite seu username" required>
+    <div class="form-group">
+      <label for="username">Nome de Usuario</label>
+      <input type="text" id="username" placeholder="Digite seu username" required>
+    </div>
+
+    <div class="form-group">
+      <label for="password">Senha</label>
+      <input type="password" id="password" placeholder="Digite sua senha" required>
+    </div>
+
+    <div class="checkbox-group">
+      <input type="checkbox" id="usePrivateKey">
+      <label for="usePrivateKey">Usar minha propria chave privada</label>
+    </div>
+
+    <div class="form-group hidden" id="privateKeyGroup">
+      <label for="privateKey">Chave Privada EC (.pem)</label>
+      <input type="file" id="privateKey" accept=".pem">
+    </div>
+
+    <div class="button-group">
+      <button id="registerBtn">Registrar</button>
+    </div>
+
+    <div class="links">
+      <p>Ja possui registro? <a href="/login">Faca login</a></p>
+    </div>
   </div>
 
-  <div class="form-group">
-    <label for="privateKey">Chave Privada EC (.pem)</label>
-    <input type="file" id="privateKey" accept=".pem" required>
-  </div>
-
-  <div class="button-group">
-    <button id="registerBtn">Registrar</button>
-  </div>
-
-  <div class="links">
-    <p>Ja possui registro? <a href="/login">Faca login</a></p>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/jsrsasign@10.5.25/lib/jsrsasign-all-min.js"></script>
-<script>
-  function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsText(file);
-    });
-  }
-
-  document.getElementById('registerBtn').addEventListener('click', async () => {
-    const username       = document.getElementById('username').value.trim();
-    const privateKeyFile = document.getElementById('privateKey').files[0];
-
-    if (!username || !privateKeyFile) {
-      alert('Preencha todos os campos!');
-      return;
-    }
-
-    try {
-      // 1. Ler a chave privada do arquivo
-      const pemContents = await readFileAsText(privateKeyFile);
-
-      // 2. Validar formato PEM
-      if (!pemContents.includes('-----BEGIN PRIVATE KEY-----') &&
-          !pemContents.includes('-----BEGIN EC PRIVATE KEY-----')) {
-        throw new Error('Formato invalido. Use chave EC no formato PEM.');
-      }
-
-      // 3. Carregar o objeto de chave via jsrsasign
-      const keyObj = KEYUTIL.getKey(pemContents);
-      if (keyObj.type !== 'EC' || keyObj.curveName !== 'secp256r1') {
-        throw new Error('A chave deve ser EC prime256v1 (secp256r1)');
-      }
-
-      // 4. Gerar o CSR automaticamente
-      const csr = new KJUR.asn1.csr.CertificationRequest({
-        subject:  { str: '/CN=' + username + '/O=org1MSP/OU=client' },
-        sbjpubkey: keyObj,
-        sigalg:   'SHA256withECDSA',
-        sbjprvkey: keyObj
-      });
-      const csrPem = csr.getPEM();
-
-      // 5. Enviar username e CSR (texto PEM) para o backend
-      const response = await fetch('/auth/register', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ username, csr: csrPem })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert('Usuario registrado com sucesso!');
-        window.location.href = '/login';
+  <script src="https://cdn.jsdelivr.net/npm/jsrsasign@10.5.25/lib/jsrsasign-all-min.js"></script>
+  <script>
+    document.getElementById('usePrivateKey').addEventListener('change', function() {
+      const group = document.getElementById('privateKeyGroup');
+      if (this.checked) {
+        group.classList.remove('hidden');
       } else {
-        alert(data.error || 'Falha ao registrar usuario.');
+        group.classList.add('hidden');
+      }
+    });
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const usePrivateKey = document.getElementById('usePrivateKey').checked;
+      const privateKeyFile = document.getElementById('privateKey').files[0];
+
+      if (!username || !password) {
+        alert('Preencha username e senha!');
+        return;
       }
 
-    } catch (error) {
-      console.error('Erro no registro:', error);
-      alert('Falha: ' + error.message);
-    }
-  });
-</script>
+      if (password.length < 6) {
+        alert('Senha deve ter pelo menos 6 caracteres');
+        return;
+      }
+
+      if (usePrivateKey && !privateKeyFile) {
+        alert('Selecione a chave privada');
+        return;
+      }
+
+      try {
+        let privateKey = null;
+
+        if (usePrivateKey) {
+          privateKey = await readFileAsText(privateKeyFile);
+
+          if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') &&
+              !privateKey.includes('-----BEGIN EC PRIVATE KEY-----')) {
+            throw new Error('Formato invalido. Use chave EC no formato PEM.');
+          }
+
+          const keyObj = KEYUTIL.getKey(privateKey);
+          if (keyObj.type !== 'EC' || keyObj.curveName !== 'secp256r1') {
+            throw new Error('A chave deve ser EC prime256v1 (secp256r1)');
+          }
+        }
+
+        const response = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, privateKey })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Usuario registrado com sucesso!');
+          window.location.href = '/login';
+        } else {
+          alert(data.error || 'Falha ao registrar usuario.');
+        }
+
+      } catch (error) {
+        console.error('Erro no registro:', error);
+        alert('Falha: ' + error.message);
+      }
+    });
+  </script>
 </body>
 </html>
