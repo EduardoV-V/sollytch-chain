@@ -418,6 +418,41 @@ function createConsortium() {
 # Bring up the peer and orderer nodes using docker compose.
 function networkUp() {
   checkPrereqs
+
+  echo "Starting network (reusing existing certificates if present)..."
+
+  # NÃO recriar organizações se já existirem
+  if [ ! -d "organizations/peerOrganizations" ]; then
+    echo "No existing organizations found, generating new ones..."
+    createOrgs
+  else
+    echo "Existing organizations found, skipping generation"
+  fi
+
+  if [ $ORG_QNTY == 1 ]; then
+    COMPOSE_FILES="-f ${COMPOSE_FILE_BASE_ORG}"
+    COUCHDB_COMPOSE=$COMPOSE_FILE_COUCH_ORG
+  else
+    COMPOSE_FILES="-f ${COMPOSE_FILE_BASE}"
+    COUCHDB_COMPOSE=$COMPOSE_FILE_COUCH
+  fi
+
+  if [ "${DATABASE}" == "couchdb" ]; then
+    COMPOSE_FILES="${COMPOSE_FILES} -f ${COUCHDB_COMPOSE}"
+  fi
+
+  IMAGE_TAG=$IMAGETAG docker-compose ${COMPOSE_FILES} up -d 2>&1
+
+  docker ps -a
+  if [ $? -ne 0 ]; then
+    fatalln "Unable to start network"
+  fi
+
+  echo "Network started successfully"
+}
+
+function networkUpClr() {
+  checkPrereqs
   # generate artifacts if they don't exist
   if [ ! -d "organizations/peerOrganizations" ]; then
     createOrgs
@@ -480,8 +515,23 @@ function deployCCAAS() {
   fi
 }
 
-# Tear down running network
 function networkDown() {
+  echo "Stopping network (preserving certificates and MSP)..."
+
+  # Derruba containers SEM apagar volumes
+  docker-compose -f $COMPOSE_FILE_BASE_ORG -f $COMPOSE_FILE_COUCH_ORG down --remove-orphans
+  docker-compose -f $COMPOSE_FILE_BASE -f $COMPOSE_FILE_COUCH -f $COMPOSE_FILE_CA down --remove-orphans
+  docker-compose -f $COMPOSE_FILE_COUCH_ORG3 -f $COMPOSE_FILE_ORG3 down --remove-orphans
+
+  if [ $? -ne 0 ]; then
+    fatalln "Failed to stop network"
+  fi
+
+  echo "Network stopped successfully (certificates preserved)"
+}
+
+# Tear down running network
+function networkDownClr() {
   # stop org3 containers also in addition to org1 and org2, in case we were running sample to add org3
   docker-compose -f $COMPOSE_FILE_BASE_ORG -f $COMPOSE_FILE_COUCH_ORG down --volumes --remove-orphans
   docker-compose -f $COMPOSE_FILE_BASE -f $COMPOSE_FILE_COUCH -f $COMPOSE_FILE_CA down --volumes --remove-orphans
@@ -698,6 +748,8 @@ elif [ "$MODE" == "createChannel" ]; then
   infoln "If network is not up, starting nodes with CLI timeout of '${MAX_RETRY}' tries and CLI delay of '${CLI_DELAY}' seconds and using database '${DATABASE} ${CRYPTO_MODE}"
 elif [ "$MODE" == "down" ]; then
   infoln "Stopping network"
+elif [ "$MODE" == "downclr" ]; then
+  infoln "Stopping network and clearing certificates"
 elif [ "$MODE" == "restart" ]; then
   infoln "Restarting network"
 elif [ "$MODE" == "deployCC" ]; then
@@ -726,6 +778,8 @@ elif [ "$MODE" == "deployCCAAS" ]; then
   deployCCAAS
 elif [ "${MODE}" == "down" ]; then
   networkDown
+elif [ "${MODE}" == "downclr" ]; then
+  networkDownClr
 else
   printHelp
   exit 1

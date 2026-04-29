@@ -2,8 +2,9 @@
 
 ORG_QNTY=3
 DEPLOY_CCAAS=false
-CCAAS_TLS_ENABLEd=""
+CCAAS_TLS_ENABLED=""
 SKIP_COLL_GEN=false
+USE_OLD=false
 
 while [[ $# -ge 1 ]] ; do
     key="$1"
@@ -22,6 +23,9 @@ while [[ $# -ge 1 ]] ; do
             ;;
         -c )
             SKIP_COLL_GEN=true
+            ;;
+        old )
+            USE_OLD=true
             ;;
   esac
   shift
@@ -44,16 +48,19 @@ if [ "$SKIP_COLL_GEN" = false ] ; then
     fi
 fi
 
-# Clear unused images and volumes
-docker rmi $(docker images --quiet --filter "dangling=true")
-docker volume rm $(docker volume ls -qf dangling=true)
-
 # Script used to start the development environment.
 if [ ! -d "chaincode/vendor" ]; then
     cd ./chaincode; GOWORK=off go mod vendor; cd ..
 fi
 cd ./chaincode; go fmt ./...; cd ..
-cd ./fabric; ./startDev.sh -n $ORG_QNTY -ccaas $DEPLOY_CCAAS $CCAAS_TLS_ENABLED; cd ..
+cd ./fabric; 
+if [ $USE_OLD = false ]; then
+    ./startDev.sh -n $ORG_QNTY -ccaas $DEPLOY_CCAAS $CCAAS_TLS_ENABLED;
+    else
+    ./startDev.sh -n $ORG_QNTY -ccaas $DEPLOY_CCAAS $CCAAS_TLS_ENABLED old;
+fi
+
+cd ..
 
 ## This brings up API in Go
 if [ $ORG_QNTY == 1 ]

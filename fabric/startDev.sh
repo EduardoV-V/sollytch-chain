@@ -3,6 +3,7 @@
 ORG_QNTY=3
 DEPLOY_CCAAS=false
 CCAAS_TLS_ENABLED=""
+USE_OLD=false
 
 while [[ $# -ge 1 ]] ; do
     key="$1"
@@ -19,6 +20,9 @@ while [[ $# -ge 1 ]] ; do
             CCAAS_TLS_ENABLED="-ccaastls"
             shift
             ;;
+        old )
+            USE_OLD=true
+            ;;
   esac
   shift
 done
@@ -32,10 +36,7 @@ fi
 
 CCCG_PATH="../chaincode/collections.json"
 
-./network.sh down -n $ORG_QNTY
-rm -rf organizations/peerOrganizations
-rm -rf organizations/ordererOrganizations
-rm -rf organizations/rest-certs
+# ./network.sh down -n $ORG_QNTY  
 
 download_binaries(){
   echo "Preparing to download fabric binaries..."
@@ -64,6 +65,15 @@ all_binaries_exist() {
   return 0
 }
 
+if [ "$USE_OLD" = false ]; then
+  echo "Modo RESET: recriando rede..."
+  rm -rf organizations/peerOrganizations
+  rm -rf organizations/ordererOrganizations
+  rm -rf organizations/rest-certs
+else
+  echo "Modo OLD: reutilizando rede existente..."
+fi
+
 if all_binaries_exist; then
   echo "All Fabric binaries are available in the system path."
 else
@@ -87,5 +97,12 @@ else
   fi
 fi 
 
-docker network create cc-tools-demo-net
-./network.sh up createChannel -n $ORG_QNTY $CCAAS_TLS_ENABLED -ca
+docker network create cc-tools-demo-net 2>/dev/null || true
+
+if [ "$USE_OLD" = true ]; then
+  echo "Subindo rede existente (sem createChannel)..."
+  ./network.sh up -n $ORG_QNTY $CCAAS_TLS_ENABLED -ca
+else
+  echo "Subindo rede nova (com createChannel)..."
+  ./network.sh up createChannel -n $ORG_QNTY $CCAAS_TLS_ENABLED -ca
+fi
