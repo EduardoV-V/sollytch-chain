@@ -39,6 +39,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(bodyParser.json());
 
+app.use((req, res, next) => {
+  console.log(`[${req.method}] ${req.url}`);
+  next();
+});
+
 app.use('/resources', express.static(path.join(__dirname, 'resources')));
 app.use(express.static(path.join(__dirname, 'views')));
 
@@ -84,7 +89,9 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+  const filePath = path.join(__dirname, 'views', 'login.html');
+  console.log('Tentando servir:', filePath);
+  res.sendFile(filePath);
 });
 
 app.get('/register', (req, res) => {

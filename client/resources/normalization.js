@@ -55,4 +55,5 @@ function normalizeS(signatureRawArray) {
 }
 
 // Exporta a função para uso externo
+console.log(p256)
 module.exports = normalizeS;
